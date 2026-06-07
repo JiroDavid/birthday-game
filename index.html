@@ -44,11 +44,11 @@
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 const W = 900, H = 560;
-// Double internal buffer so text renders at 2× resolution → crisp when CSS-scaled
-const PXSCALE = 2;
-canvas.width  = W * PXSCALE;
-canvas.height = H * PXSCALE;
-const HUD_H = 44;
+const HUD_H = 52; // taller HUD for readable text
+// Device-pixel-ratio aware canvas: physical pixels match screen density → no blur
+let renderDPR = Math.min(window.devicePixelRatio || 1, 3);
+canvas.width  = W * renderDPR;
+canvas.height = H * renderDPR;
 const TILE = 60;
 const COLS = 15, ROWS = 9;
 const PF_TOP = HUD_H;
@@ -792,7 +792,7 @@ function updateParticles() {
 
 function render() {
   ctx.save();
-  ctx.scale(PXSCALE, PXSCALE); // all game coords stay in 900×560 space; buffer is 2×
+  ctx.scale(renderDPR, renderDPR); // logical coords stay 900×560; buffer = DPR× physical pixels
   if (screenShake.timer > 0) {
     ctx.translate(screenShake.x, screenShake.y);
     screenShake.timer--;
@@ -1042,7 +1042,11 @@ function updatePet() {
 
 // Scale canvas to fill viewport while preserving aspect ratio
 function resizeCanvas() {
-  // CSS size targets the logical W×H viewport; buffer is PXSCALE× larger so text is crisp
+  // Recalculate DPR (can change if window moves between screens)
+  renderDPR = Math.min(window.devicePixelRatio || 1, 3);
+  canvas.width  = W * renderDPR;
+  canvas.height = H * renderDPR;
+  // CSS size: fit logical 900×560 into the viewport
   const scaleX = (window.innerWidth  - 16) / W;
   const scaleY = (window.innerHeight - 16) / H;
   const scale  = Math.min(scaleX, scaleY);
@@ -1329,9 +1333,9 @@ function drawSkillPickup() {
   ctx.fillRect(0, 0, W, H);
   ctx.save();
   ctx.textAlign = 'center';
-  ctx.fillStyle = '#FFB3C6'; ctx.font = px(10);
+  ctx.fillStyle = '#FFB3C6'; ctx.font = px(14);
   ctx.fillText('❖ UPGRADE ❖', W/2, 140);
-  ctx.fillStyle = '#888'; ctx.font = px(6);
+  ctx.fillStyle = '#888'; ctx.font = px(14);
   ctx.fillText('Room cleared! Choose a power-up.', W/2, 168);
 
   skillPickupState.choices.forEach((skillId, i) => {
@@ -1370,9 +1374,9 @@ function drawBossIntro() {
   const alpha = Math.min(1, bossIntro.timer/20);
   ctx.globalAlpha = alpha;
   ctx.textAlign = 'center';
-  ctx.fillStyle = '#cc3333'; ctx.font = px(9);
+  ctx.fillStyle = '#cc3333'; ctx.font = px(16);
   ctx.fillText('BLOOM', W/2, H/2-20);
-  ctx.fillStyle = '#888'; ctx.font = px(6);
+  ctx.fillStyle = '#888'; ctx.font = px(14);
   ctx.fillText("She's here to protect her slimes...", W/2, H/2+20);
   ctx.restore();
 }
@@ -1700,7 +1704,7 @@ function drawHUD() {
 
   // Room name — centered, readable
   ctx.fillStyle = '#FFD6E0';
-  ctx.font = px(7);
+  ctx.font = px(11);
   ctx.textAlign = 'center';
   ctx.fillText(currentRoom ? currentRoom.name.toUpperCase() : '', W/2, HUD_H/2 + 4);
 
@@ -1795,7 +1799,7 @@ function drawBossHPBar() {
   const hpW = Math.max(0, (boss.hp/boss.maxHP)) * barW;
   ctx.fillStyle = boss.hp > 12 ? '#cc3333' : '#ff6666';
   ctx.fillRect(bx, by, hpW, barH);
-  ctx.fillStyle = '#e8c547'; ctx.font = px(5); ctx.textAlign = 'center';
+  ctx.fillStyle = '#e8c547'; ctx.font = px(10); ctx.textAlign = 'center';
   ctx.fillText('BLOOM', W/2, by - 6);
   ctx.restore();
 }
@@ -1846,7 +1850,7 @@ function drawGardenProps(room) {
     ctx.fillStyle = color;
     ctx.fillRect(x-28, y-34, 56, 46);
     // Label
-    ctx.fillStyle = '#e8c547'; ctx.font = px(4); ctx.textAlign='center';
+    ctx.fillStyle = '#e8c547'; ctx.font = px(12); ctx.textAlign='center';
     ctx.fillText(label, x, y+22);
     // E prompt when nearby
     if (Math.hypot(player.x-x, player.y-y) < 50) {
@@ -2013,20 +2017,20 @@ function drawTitle() {
 
   // Game title — two lines
   ctx.fillStyle = '#FFB3C6';
-  ctx.font = px(13);
+  ctx.font = px(16);
   ctx.shadowColor = '#FF6B9D'; ctx.shadowBlur = 18;
   ctx.fillText('BINDINGS OF', W/2, 170);
   ctx.shadowBlur = 0; ctx.shadowColor = 'transparent';
 
   ctx.fillStyle = '#FFF5E4';
-  ctx.font = px(20);
+  ctx.font = px(24);
   ctx.shadowColor = '#FFB3C6'; ctx.shadowBlur = 20;
   ctx.fillText('NOPEYEP', W/2, 220);
   ctx.shadowBlur = 0; ctx.shadowColor = 'transparent';
 
   // Subtitle
   ctx.fillStyle = '#C9B1FF';
-  ctx.font = px(6);
+  ctx.font = px(14);
   ctx.fillText('a birthday game made for NopeYep', W/2, 262);
 
   // Controls box
@@ -2038,18 +2042,18 @@ function drawTitle() {
   ctx.stroke();
 
   ctx.fillStyle = '#FFD6E0';
-  ctx.font = px(6);
+  ctx.font = px(11);
   ctx.fillText('HOW TO PLAY', W/2, 310);
   ctx.fillStyle = '#C7F0BD';
-  ctx.font = px(5);
-  ctx.fillText('WASD  move       ARROWS  shoot', W/2, 334);
-  ctx.fillText('E  interact      ESC  close popup', W/2, 354);
-  ctx.fillText('collect upgrades - befriend Bloom - reach the garden', W/2, 374);
+  ctx.font = px(9);
+  ctx.fillText('WASD  move             ARROWS  shoot', W/2, 334);
+  ctx.fillText('E  interact            ESC  close popup', W/2, 352);
+  ctx.fillText('clear rooms for upgrades - reach the garden', W/2, 370);
 
   // Blinking prompt
   if (Math.floor(frameCount/30)%2 === 0) {
     ctx.fillStyle = '#FF8B6A';
-    ctx.font = px(8);
+    ctx.font = px(12);
     ctx.shadowColor = '#FF8B6A'; ctx.shadowBlur = 12;
     ctx.fillText('PRESS ENTER TO START', W/2, 438);
     ctx.shadowBlur = 0; ctx.shadowColor = 'transparent';
