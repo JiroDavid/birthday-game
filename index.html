@@ -87,6 +87,42 @@ Object.entries(bloomPaths).forEach(([key, src]) => loadImage(src, img => { bloom
 const BLOOM_FRAMES = { crawl:5, attack:7, jump:6, hurt:6, happy:5 };
 const BLOOM_FS = 64; // frame size in spritesheet
 
+// Player sprites (Dude Monster — 32×32 per frame)
+const dudeSprites = {};
+const DUDE_FS = 32;
+const DUDE_DS = 64; // display size (2× scale)
+loadImage('sprites/3 Dude_Monster/Dude_Monster_Idle_4.png', img => { dudeSprites.idle = img; });
+loadImage('sprites/3 Dude_Monster/Dude_Monster_Walk_6.png', img => { dudeSprites.walk = img; });
+loadImage('sprites/3 Dude_Monster/Dude_Monster_Hurt_4.png', img => { dudeSprites.hurt = img; });
+const DUDE_FRAMES = { idle:4, walk:6, hurt:4 };
+
+// Bat sprites (64×64 per frame)
+const batSprites = {};
+const BAT_FS = 64;
+const BAT_DS = 72; // display size (slightly larger than 1×)
+loadImage('sprites/fly/DarkFantasyEnemies_FREE/Bat/Bat with VFX/Bat-IdleFly.png', img => { batSprites.idle = img; });
+loadImage('sprites/fly/DarkFantasyEnemies_FREE/Bat/Bat with VFX/Bat-Run.png',    img => { batSprites.run  = img; });
+loadImage('sprites/fly/DarkFantasyEnemies_FREE/Bat/Bat with VFX/Bat-Hurt.png',   img => { batSprites.hurt = img; });
+const BAT_FRAMES = { idle:9, run:8, hurt:5 };
+
+// Stone Golem sprites (100×100 per frame, combined 1000×1000 sheet)
+const golemSprites = {};
+const GOLEM_FS = 100;
+const GOLEM_DS = 96; // display size
+loadImage('sprites/mecha-stone-boss/Mecha-stone Golem 0.1/PNG sheet/Character_sheet.png',
+  img => { golemSprites.sheet = img; });
+// Row 0 = idle/moving (4 frames), Row 1 = next animation, etc.
+const GOLEM_IDLE_ROW = 0;
+const GOLEM_IDLE_FRAMES = 4;
+
+// Grub sprites (green mini slime — 64×64 per frame, row 0 of mm-crawl)
+const grubSprites = {};
+const GRUB_FS = 64;
+const GRUB_DS = 48; // display size (smaller than Bloom)
+loadImage('sprites/Momo-Mama/Momo-Mama/variants/green/mm-crawl.png',
+  img => { grubSprites.crawl = img; });
+const GRUB_FRAMES = 5;
+
 // ─── STATE ────────────────────────────────────────────────────────────────
 let gameState = 'TITLE'; // TITLE | PLAYING | TRANSITION | SKILL_PICKUP | BOSS_INTRO | POPUP | CELEBRATION
 
@@ -308,13 +344,15 @@ function enemyRadius(e) {
 }
 
 function spawnEnemy(type, x, y) {
-  const base = { type, x, y, hitFlash: 0, slowTimer: 0, knockVx: 0, knockVy: 0 };
+  const base = { type, x, y, hitFlash: 0, slowTimer: 0, knockVx: 0, knockVy: 0, animFrame: 0, animTimer: 0 };
   if (type === 'grub') enemies.push({ ...base, hp: 2, hopTimer: 0 });
   if (type === 'fly')  enemies.push({ ...base, hp: 1, phase: 'orbit', orbitAngle: Math.random() * Math.PI * 2, dashVx: 0, dashVy: 0, dashTimer: 0, telegraphTimer: 0, orbitRadius: 120 + Math.random() * 60, orbitFrames: null });
   if (type === 'tank') enemies.push({ ...base, hp: 3, pulseTimer: 0, orbitalCooldown: 0 });
 }
 
 function updateGrub(e) {
+  // Advance animation frame
+  e.animTimer++; if (e.animTimer >= 8) { e.animTimer = 0; e.animFrame++; }
   const speed = 1.2 * (e.slowTimer > 0 ? 0.4 : 1);
   const dx = player.x - e.x, dy = player.y - e.y;
   const len = Math.hypot(dx, dy) || 1;
@@ -330,6 +368,8 @@ function updateGrub(e) {
 }
 
 function updateFly(e) {
+  // Advance animation frame
+  e.animTimer++; if (e.animTimer >= 8) { e.animTimer = 0; e.animFrame++; }
   const slowMult = e.slowTimer > 0 ? 0.4 : 1;
   if (e.slowTimer > 0) e.slowTimer--;
   if (e.hitFlash > 0) e.hitFlash--;
@@ -374,6 +414,8 @@ function updateFly(e) {
 }
 
 function updateTank(e) {
+  // Advance animation frame
+  e.animTimer++; if (e.animTimer >= 8) { e.animTimer = 0; e.animFrame++; }
   const speed = 0.7 * (e.slowTimer > 0 ? 0.4 : 1);
   if (e.slowTimer > 0) e.slowTimer--;
   if (e.hitFlash > 0) e.hitFlash--;
@@ -584,6 +626,7 @@ function render() {
   if (gameState==='TRANSITION') { drawTransition(); drawHUD(); ctx.restore(); return; }
 
   if (currentRoom) drawRoom(currentRoom);
+  drawGardenProps(currentRoom);
   enemies.forEach(drawEnemy);
   if (boss) { drawBloom(); drawBossHPBar(); }
   drawPet();
@@ -621,6 +664,7 @@ function initGame() {
   player.vx = 0; player.vy = 0;
   player.facing = 1;
   player.x = 450; player.y = 300;
+  player.animFrame = 0; player.animTimer = 0;
   Object.keys(player.skills).forEach(k => player.skills[k] = false);
   player.orbitals = [];
 
@@ -941,6 +985,43 @@ function drawRoom(room) {
     }
   }
 
+  // Garden room: brighter grass + flower carpet + grass tufts
+  if (room.type === 'garden') {
+    for (let ty = 1; ty < ROWS-1; ty++) {
+      for (let tx = 1; tx < COLS-1; tx++) {
+        const rx = tx*TILE, ry = PF_TOP+ty*TILE;
+        ctx.fillStyle = (tx+ty)%2===0 ? '#3a7a3a' : '#3e8440';
+        ctx.fillRect(rx, ry, TILE, TILE);
+        if ((tx*3+ty*7)%5===0) {
+          ctx.strokeStyle='#4a9a4a'; ctx.lineWidth=1.5;
+          [[6,8],[14,5],[22,9]].forEach(([gx,gy]) => {
+            ctx.beginPath(); ctx.moveTo(rx+gx, ry+TILE-2);
+            ctx.lineTo(rx+gx-2, ry+TILE-gy); ctx.stroke();
+          });
+        }
+      }
+    }
+  }
+
+  // Decorations: flowers + pebbles in non-obstacle tiles (deterministic per room)
+  const decorCount = 8;
+  for (let i = 0; i < decorCount; i++) {
+    const t = (room.id * 17 + i * 37) % 100;
+    const tx = 2 + (t * 11) % (COLS-4);
+    const ty = 2 + (t * 7)  % (ROWS-4);
+    if (room.obstacles.some(([ox,oy]) => ox===tx && oy===ty)) continue;
+    const rx = tx*TILE+20, ry = PF_TOP+ty*TILE+20;
+    if (i%3===0) {
+      ctx.fillStyle = i%6===0 ? '#e8c547' : '#e05252';
+      ctx.beginPath(); ctx.arc(rx, ry, 5, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle = '#4a9a4a';
+      ctx.fillRect(rx-1, ry+4, 2, 8);
+    } else {
+      ctx.fillStyle = '#5a5a4a';
+      ctx.beginPath(); ctx.ellipse(rx, ry, 6, 4, 0.3, 0, Math.PI*2); ctx.fill();
+    }
+  }
+
   // Doors
   const doorDefs = {
     north: { x: W/2-30, y: PF_TOP,     w: 60, h: TILE },
@@ -1114,125 +1195,150 @@ function drawPlayer() {
   ctx.save();
   // Shadow
   ctx.fillStyle = 'rgba(0,0,0,0.3)';
-  ctx.beginPath();
-  ctx.ellipse(player.x, player.y + 22, 14, 6, 0, 0, Math.PI * 2);
-  ctx.fill();
+  ctx.beginPath(); ctx.ellipse(player.x, player.y + 28, 18, 7, 0, 0, Math.PI*2); ctx.fill();
 
   // Blink during i-frames
   if (player.iframes > 0 && Math.floor(frameCount / 4) % 2 === 1) {
     ctx.restore(); return;
   }
 
-  if (player.sprite && player.sprite.naturalWidth > 0) {
-    ctx.translate(player.x, player.y);
-    ctx.scale(player.facing, 1);
-    ctx.drawImage(player.sprite, -20, -28, 40, 48);
+  ctx.translate(player.x, player.y);
+  ctx.scale(player.facing, 1);
+
+  // Pick animation sheet + frame count
+  let sheet = null, frameCount2 = 1;
+  const isMoving = (keys['w']||keys['W']||keys['s']||keys['S']||keys['a']||keys['A']||keys['d']||keys['D']);
+  if (player.iframes > 0 && dudeSprites.hurt) {
+    sheet = dudeSprites.hurt; frameCount2 = DUDE_FRAMES.hurt;
+  } else if (isMoving && dudeSprites.walk) {
+    sheet = dudeSprites.walk; frameCount2 = DUDE_FRAMES.walk;
+  } else if (dudeSprites.idle) {
+    sheet = dudeSprites.idle; frameCount2 = DUDE_FRAMES.idle;
+  }
+
+  // Advance player anim (every 6 frames)
+  if (player.animTimer === undefined) player.animTimer = 0;
+  if (player.animFrame === undefined) player.animFrame = 0;
+  player.animTimer++;
+  if (player.animTimer >= 6) { player.animTimer = 0; player.animFrame++; }
+  const frame = Math.floor(player.animFrame % frameCount2);
+
+  if (sheet && sheet.naturalWidth > 0) {
+    ctx.drawImage(sheet, frame * DUDE_FS, 0, DUDE_FS, DUDE_FS,
+                  -DUDE_DS/2, -DUDE_DS/2, DUDE_DS, DUDE_DS);
   } else {
-    ctx.translate(player.x, player.y);
-    ctx.scale(player.facing, 1);
+    // Fallback placeholder
     ctx.fillStyle = '#c8a87a';
-    ctx.beginPath(); ctx.arc(0, -8, 18, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(0, -8, 18, 0, Math.PI*2); ctx.fill();
     ctx.fillStyle = '#222';
-    ctx.beginPath(); ctx.arc(-6, -10, 3, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.arc(6, -10, 3, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(-6,-10,3,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(6,-10,3,0,Math.PI*2); ctx.fill();
     ctx.fillStyle = '#88aaff';
-    ctx.beginPath(); ctx.ellipse(-7, -4, 2, 4, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.ellipse(7, -4, 2, 4, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(-7,-4,2,4,0,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(7,-4,2,4,0,0,Math.PI*2); ctx.fill();
   }
   ctx.restore();
 }
 
 function drawGrub(e) {
-  const bob = Math.sin(e.hopTimer / 30 * Math.PI * 2) * 4;
-  const squash = 1 + Math.abs(Math.sin(e.hopTimer / 30 * Math.PI * 2)) * 0.2;
   ctx.save();
-  ctx.translate(e.x, e.y + bob);
-  ctx.scale(1 / squash, squash);
-  const bodyColor = e.hitFlash > 0 ? '#ffffff' : e.slowTimer > 0 ? '#88ccff' : '#4a8a2a';
-  const highColor  = e.hitFlash > 0 ? '#ffffff' : e.slowTimer > 0 ? '#aaddff' : '#5aaa3a';
-  ctx.fillStyle = bodyColor;
-  ctx.beginPath(); ctx.ellipse(0, 0, 18, 13, 0, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = highColor;
-  ctx.beginPath(); ctx.ellipse(0, -2, 14, 10, 0, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = '#fff';
-  ctx.beginPath(); ctx.arc(-7, -5, 4, 0, Math.PI * 2); ctx.fill();
-  ctx.beginPath(); ctx.arc(7, -5, 4, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = '#222';
-  ctx.beginPath(); ctx.arc(-6, -5, 2.5, 0, Math.PI * 2); ctx.fill();
-  ctx.beginPath(); ctx.arc(8, -5, 2.5, 0, Math.PI * 2); ctx.fill();
+  ctx.translate(e.x, e.y);
+  const frame = Math.floor(e.animFrame % GRUB_FRAMES);
+  if (grubSprites.crawl && grubSprites.crawl.naturalWidth > 0) {
+    if (e.hitFlash > 0) ctx.filter = 'brightness(10)';
+    else if (e.slowTimer > 0) ctx.filter = 'hue-rotate(180deg) brightness(1.5)';
+    ctx.drawImage(grubSprites.crawl, frame * GRUB_FS, 0, GRUB_FS, GRUB_FS,
+                  -GRUB_DS/2, -GRUB_DS/2, GRUB_DS, GRUB_DS);
+    ctx.filter = 'none';
+  } else {
+    // Canvas fallback (original hop/squash art)
+    const bob = Math.sin(e.hopTimer / 30 * Math.PI * 2) * 4;
+    const squash = 1 + Math.abs(Math.sin(e.hopTimer / 30 * Math.PI * 2)) * 0.2;
+    ctx.translate(0, bob);
+    ctx.scale(1/squash, squash);
+    const bodyColor = e.hitFlash>0 ? '#fff' : e.slowTimer>0 ? '#88ccff' : '#4a8a2a';
+    ctx.fillStyle = bodyColor;
+    ctx.beginPath(); ctx.ellipse(0,0,18,13,0,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.beginPath(); ctx.arc(-7,-5,4,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(7,-5,4,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#222';
+    ctx.beginPath(); ctx.arc(-6,-5,2.5,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(8,-5,2.5,0,Math.PI*2); ctx.fill();
+  }
   ctx.restore();
 }
 
 function drawFly(e) {
-  const flutter = Math.sin(frameCount * 0.3) * 3;
-  const glow = e.phase === 'telegraph' ? Math.abs(Math.sin(frameCount * 0.2)) : 0;
   ctx.save();
-  ctx.translate(e.x, e.y + flutter * 0.3);
+  ctx.translate(e.x, e.y);
 
-  if (glow > 0) { ctx.shadowColor='#ff4444'; ctx.shadowBlur=15*glow; }
+  let sheet = null, frames = 1;
+  if (e.hitFlash > 0 && batSprites.hurt)         { sheet = batSprites.hurt; frames = BAT_FRAMES.hurt; }
+  else if (e.phase === 'dash' && batSprites.run)  { sheet = batSprites.run;  frames = BAT_FRAMES.run; }
+  else if (batSprites.idle)                        { sheet = batSprites.idle; frames = BAT_FRAMES.idle; }
 
-  // Wings
-  ctx.globalAlpha = e.hitFlash > 0 ? 1 : 0.5;
-  ctx.fillStyle = e.slowTimer > 0 ? 'rgba(136,200,255,0.5)' : 'rgba(150,180,255,0.5)';
-  ctx.beginPath(); ctx.ellipse(-14, -2+flutter, 14, 7, -0.3, 0, Math.PI*2); ctx.fill();
-  ctx.beginPath(); ctx.ellipse(14, -2+flutter, 14, 7, 0.3, 0, Math.PI*2); ctx.fill();
-  ctx.globalAlpha = 1;
+  const frame = Math.floor(e.animFrame % frames);
 
-  // Body
-  ctx.fillStyle = e.hitFlash>0 ? '#fff' : (e.slowTimer>0 ? '#88aacc' : '#3a3a6a');
-  ctx.beginPath(); ctx.ellipse(0, 4, 8, 11, 0, 0, Math.PI*2); ctx.fill();
-  ctx.fillStyle = e.hitFlash>0 ? '#fff' : (e.slowTimer>0 ? '#aaccee' : '#5a5a9a');
-  ctx.beginPath(); ctx.ellipse(0, -2, 10, 8, 0, 0, Math.PI*2); ctx.fill();
-
-  // Compound eyes
-  ctx.fillStyle = '#ff4444';
-  ctx.beginPath(); ctx.arc(-5, -4, 4, 0, Math.PI*2); ctx.fill();
-  ctx.beginPath(); ctx.arc(5, -4, 4, 0, Math.PI*2); ctx.fill();
-  ctx.fillStyle = '#cc0000';
-  ctx.beginPath(); ctx.arc(-5, -4, 2.5, 0, Math.PI*2); ctx.fill();
-  ctx.beginPath(); ctx.arc(5, -4, 2.5, 0, Math.PI*2); ctx.fill();
-
+  if (sheet && sheet.naturalWidth > 0) {
+    if (e.hitFlash > 0) ctx.filter = 'brightness(10)';
+    else if (e.slowTimer > 0) ctx.filter = 'hue-rotate(180deg) brightness(1.2)';
+    // Telegraph glow
+    if (e.phase === 'telegraph') {
+      ctx.shadowColor = '#ff4444';
+      ctx.shadowBlur = 15 * Math.abs(Math.sin(frameCount * 0.2));
+    }
+    ctx.drawImage(sheet, frame * BAT_FS, 0, BAT_FS, BAT_FS,
+                  -BAT_DS/2, -BAT_DS/2, BAT_DS, BAT_DS);
+    ctx.filter = 'none';
+  } else {
+    // Canvas fallback (original fly art)
+    const flutter = Math.sin(frameCount * 0.3) * 3;
+    const glow = e.phase === 'telegraph' ? Math.abs(Math.sin(frameCount * 0.2)) : 0;
+    if (glow > 0) { ctx.shadowColor='#ff4444'; ctx.shadowBlur=15*glow; }
+    ctx.globalAlpha = 0.5;
+    ctx.fillStyle = 'rgba(150,180,255,0.5)';
+    ctx.beginPath(); ctx.ellipse(-14,-2+flutter,14,7,-0.3,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(14,-2+flutter,14,7,0.3,0,Math.PI*2); ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = e.hitFlash>0 ? '#fff' : '#5a5a9a';
+    ctx.beginPath(); ctx.ellipse(0,4,8,11,0,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#ff4444';
+    ctx.beginPath(); ctx.arc(-5,-4,4,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(5,-4,4,0,Math.PI*2); ctx.fill();
+  }
   ctx.restore();
 }
 
 function drawTank(e) {
-  const pulse = 1 + Math.sin(e.pulseTimer/60*Math.PI*2) * 0.04;
   ctx.save();
   ctx.translate(e.x, e.y);
-  ctx.scale(pulse, pulse);
 
-  const bodyColor = e.hitFlash>0 ? '#fff' : (e.slowTimer>0 ? '#88aacc' : '#6a1a1a');
-  const highColor  = e.hitFlash>0 ? '#fff' : (e.slowTimer>0 ? '#aaccee' : '#8a2a2a');
+  const frame = Math.floor(e.animFrame % GOLEM_IDLE_FRAMES);
 
-  // Shell body
-  ctx.fillStyle = bodyColor;
-  ctx.beginPath(); ctx.ellipse(0, 4, 24, 19, 0, 0, Math.PI*2); ctx.fill();
-  ctx.fillStyle = highColor;
-  ctx.beginPath(); ctx.ellipse(0, 3, 20, 16, 0, 0, Math.PI*2); ctx.fill();
-
-  // Shell dividing lines
-  ctx.strokeStyle = bodyColor; ctx.lineWidth = 1.5;
-  ctx.beginPath(); ctx.moveTo(0,-12); ctx.lineTo(0,22); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(-22,4); ctx.bezierCurveTo(-10,-3,10,-3,22,4); ctx.stroke();
-
-  // HP pips on back (go dark as hp reduces)
-  for (let i=0; i<3; i++) {
-    ctx.fillStyle = i < e.hp ? '#ff6060' : '#3a1010';
-    ctx.beginPath(); ctx.arc(-8+i*8, 6, 4, 0, Math.PI*2); ctx.fill();
+  if (golemSprites.sheet && golemSprites.sheet.naturalWidth > 0) {
+    if (e.hitFlash > 0) ctx.filter = 'brightness(10)';
+    else if (e.slowTimer > 0) ctx.filter = 'hue-rotate(200deg) brightness(1.2)';
+    ctx.drawImage(golemSprites.sheet,
+                  frame * GOLEM_FS, GOLEM_IDLE_ROW * GOLEM_FS, GOLEM_FS, GOLEM_FS,
+                  -GOLEM_DS/2, -GOLEM_DS/2, GOLEM_DS, GOLEM_DS);
+    ctx.filter = 'none';
+  } else {
+    // Canvas fallback (original tank art)
+    const pulse = 1 + Math.sin(e.pulseTimer/60*Math.PI*2) * 0.04;
+    ctx.scale(pulse, pulse);
+    ctx.fillStyle = e.hitFlash>0 ? '#fff' : '#6a1a1a';
+    ctx.beginPath(); ctx.ellipse(0,4,24,19,0,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle = e.hitFlash>0 ? '#fff' : '#8a2a2a';
+    ctx.beginPath(); ctx.ellipse(0,3,20,16,0,0,Math.PI*2); ctx.fill();
+    for (let i=0; i<3; i++) {
+      ctx.fillStyle = i<e.hp ? '#ff6060' : '#3a1010';
+      ctx.beginPath(); ctx.arc(-8+i*8,6,4,0,Math.PI*2); ctx.fill();
+    }
+    ctx.fillStyle = '#7a2020'; ctx.beginPath(); ctx.arc(0,-14,10,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(-5,-16,3.5,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(5,-16,3.5,0,Math.PI*2); ctx.fill();
   }
-
-  // Head
-  ctx.fillStyle = e.hitFlash>0 ? '#fff' : '#7a2020';
-  ctx.beginPath(); ctx.arc(0,-14,10,0,Math.PI*2); ctx.fill();
-
-  // Eyes
-  ctx.fillStyle='#fff';
-  ctx.beginPath(); ctx.arc(-5,-16,3.5,0,Math.PI*2); ctx.fill();
-  ctx.beginPath(); ctx.arc(5,-16,3.5,0,Math.PI*2); ctx.fill();
-  ctx.fillStyle='#000';
-  ctx.beginPath(); ctx.arc(-4,-16,2,0,Math.PI*2); ctx.fill();
-  ctx.beginPath(); ctx.arc(6,-16,2,0,Math.PI*2); ctx.fill();
-
   ctx.restore();
 }
 
@@ -1444,6 +1550,47 @@ function drawPet() {
     ctx.textAlign = 'center'; ctx.fillText('[E] befriend', 0, -32);
     ctx.textAlign = 'left';
   }
+  ctx.restore();
+}
+
+function drawGardenProps(room) {
+  if (!room || room.type !== 'garden') return;
+  ctx.save();
+
+  const drawBoard = (x, y, label, color) => {
+    // Board frame
+    ctx.fillStyle = '#3a2010';
+    ctx.fillRect(x-32, y-38, 64, 54);
+    ctx.fillStyle = color;
+    ctx.fillRect(x-28, y-34, 56, 46);
+    // Label
+    ctx.fillStyle = '#e8c547'; ctx.font = px(4); ctx.textAlign='center';
+    ctx.fillText(label, x, y+22);
+    // E prompt when nearby
+    if (Math.hypot(player.x-x, player.y-y) < 50) {
+      ctx.fillStyle='#fff'; ctx.font=px(5);
+      ctx.fillText('[E]', x, y-46);
+    }
+  };
+
+  drawBoard(room.photoBoard.x, room.photoBoard.y, 'PHOTOS', '#5a8a5a');
+  drawBoard(room.videoBoard.x, room.videoBoard.y, 'VIDEOS', '#5a5a8a');
+
+  // Throne
+  const {x: tx, y: ty} = room.throne;
+  ctx.fillStyle = '#8b6914'; ctx.fillRect(tx-24, ty-44, 48, 54);
+  ctx.fillStyle = '#e8c547';
+  ctx.fillRect(tx-20, ty-54, 40, 16);
+  ctx.fillRect(tx-20, ty-40, 40, 40);
+  ctx.fillStyle = '#aa8822';
+  [[-12,-50],[12,-50],[-12,-32],[12,-32]].forEach(([ox,oy]) => {
+    ctx.beginPath(); ctx.arc(tx+ox, ty+oy, 4, 0, Math.PI*2); ctx.fill();
+  });
+  if (Math.hypot(player.x-tx, player.y-ty) < 50) {
+    ctx.fillStyle='#fff'; ctx.font=px(5); ctx.textAlign='center';
+    ctx.fillText('[E]', tx, ty-62);
+  }
+  ctx.textAlign='left';
   ctx.restore();
 }
 
