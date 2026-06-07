@@ -44,6 +44,10 @@
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 const W = 900, H = 560;
+// Double internal buffer so text renders at 2× resolution → crisp when CSS-scaled
+const PXSCALE = 2;
+canvas.width  = W * PXSCALE;
+canvas.height = H * PXSCALE;
 const HUD_H = 44;
 const TILE = 60;
 const COLS = 15, ROWS = 9;
@@ -788,6 +792,7 @@ function updateParticles() {
 
 function render() {
   ctx.save();
+  ctx.scale(PXSCALE, PXSCALE); // all game coords stay in 900×560 space; buffer is 2×
   if (screenShake.timer > 0) {
     ctx.translate(screenShake.x, screenShake.y);
     screenShake.timer--;
@@ -1037,6 +1042,7 @@ function updatePet() {
 
 // Scale canvas to fill viewport while preserving aspect ratio
 function resizeCanvas() {
+  // CSS size targets the logical W×H viewport; buffer is PXSCALE× larger so text is crisp
   const scaleX = (window.innerWidth  - 16) / W;
   const scaleY = (window.innerHeight - 16) / H;
   const scale  = Math.min(scaleX, scaleY);
@@ -1641,18 +1647,16 @@ function drawMinimap() {
       ctx.stroke();
     }
 
-    // Garden icon
+    // Garden: small pink dot marker
     if (room.type === 'garden') {
-      ctx.font = '10px serif';
-      ctx.textAlign = 'center';
-      ctx.fillText('🌸', rx + cellW/2, ry + cellH - 1);
+      ctx.fillStyle = '#FFB3C6';
+      ctx.beginPath(); ctx.arc(rx + cellW/2, ry + cellH/2, 3, 0, Math.PI*2); ctx.fill();
     }
 
-    // Boss room skull
+    // Boss: red dot when uncleared
     if (room.type === 'boss' && room.visited && !room.cleared) {
-      ctx.font = '9px serif';
-      ctx.textAlign = 'center';
-      ctx.fillText('💀', rx + cellW/2, ry + cellH - 1);
+      ctx.fillStyle = '#ff4444';
+      ctx.beginPath(); ctx.arc(rx + cellW/2, ry + cellH/2, 3, 0, Math.PI*2); ctx.fill();
     }
   });
   ctx.textAlign = 'left';
@@ -1970,32 +1974,30 @@ function drawCelebration() {
 }
 
 function drawTitle() {
-  // Background — soft dark purple
-  ctx.fillStyle = '#1a0f1a';
+  // Background — deep garden night
+  ctx.fillStyle = '#0f0a1a';
   ctx.fillRect(0, 0, W, H);
 
-  // Animated pastel grass along bottom
-  for (let i = 0; i < 50; i++) {
-    const x = (i * 71) % W;
-    const baseY = H - 40 - (i * 23) % 60;
-    const sway = Math.sin(frameCount * 0.03 + i * 0.4) * 4;
-    const hue = (i * 37) % 60;
-    ctx.strokeStyle = `hsl(${120+hue}, 60%, 70%)`;
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.moveTo(x + sway, baseY + 18);
-    ctx.lineTo(x, baseY);
-    ctx.stroke();
-  }
+  // Subtle radial glow in center
+  const glow = ctx.createRadialGradient(W/2, H/2, 60, W/2, H/2, 380);
+  glow.addColorStop(0, 'rgba(255,179,198,0.08)');
+  glow.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = glow;
+  ctx.fillRect(0, 0, W, H);
 
-  // Floating flowers decoration
-  for (let i = 0; i < 8; i++) {
-    const fx = 60 + i * 110 + Math.sin(frameCount*0.02 + i) * 8;
-    const fy = 80 + (i%2)*30 + Math.cos(frameCount*0.015 + i) * 5;
-    ctx.font = '18px serif';
-    ctx.textAlign = 'center';
-    ctx.fillText(['🌸','🌺','🌼','🌷','🍀'][i%5], fx, fy);
-  }
+  // Pixel-art dot pattern — small bright dots scattered around edges
+  const dotSeeds = [
+    [80,60],[180,40],[320,70],[520,50],[680,65],[820,45],
+    [60,440],[200,460],[400,470],[600,455],[750,445],[860,460],
+    [40,180],[50,320],[860,200],[870,360],
+  ];
+  dotSeeds.forEach(([x,y], i) => {
+    const pulse = 0.5 + 0.5 * Math.sin(frameCount * 0.04 + i * 1.3);
+    ctx.fillStyle = `rgba(255,200,220,${0.3 * pulse + 0.1})`;
+    ctx.fillRect(x, y, 3, 3);
+    ctx.fillStyle = `rgba(200,180,255,${0.2 * pulse})`;
+    ctx.fillRect(x+5, y+4, 2, 2);
+  });
 
   // Decorative frame
   ctx.strokeStyle = '#FFB3C6';
@@ -2042,7 +2044,7 @@ function drawTitle() {
   ctx.font = px(5);
   ctx.fillText('WASD  move       ARROWS  shoot', W/2, 334);
   ctx.fillText('E  interact      ESC  close popup', W/2, 354);
-  ctx.fillText('collect upgrades · befriend Bloom · reach the garden', W/2, 374);
+  ctx.fillText('collect upgrades - befriend Bloom - reach the garden', W/2, 374);
 
   // Blinking prompt
   if (Math.floor(frameCount/30)%2 === 0) {
