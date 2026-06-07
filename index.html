@@ -1040,18 +1040,25 @@ function updatePet() {
   requestAnimationFrame(loop);
 })();
 
-// Scale canvas to fill viewport while preserving aspect ratio
+// Crisp canvas: buffer = exact physical pixels (CSS display × device DPR = zero upscaling)
 function resizeCanvas() {
-  // Recalculate DPR (can change if window moves between screens)
-  renderDPR = Math.min(window.devicePixelRatio || 1, 3);
-  canvas.width  = W * renderDPR;
-  canvas.height = H * renderDPR;
-  // CSS size: fit logical 900×560 into the viewport
+  const dpr = window.devicePixelRatio || 1;
   const scaleX = (window.innerWidth  - 16) / W;
   const scaleY = (window.innerHeight - 16) / H;
-  const scale  = Math.min(scaleX, scaleY);
-  canvas.style.width  = Math.round(W * scale) + 'px';
-  canvas.style.height = Math.round(H * scale) + 'px';
+  const cssScale = Math.min(scaleX, scaleY);
+
+  // CSS display size — what the user visually sees
+  const cssW = Math.round(W * cssScale);
+  const cssH = Math.round(H * cssScale);
+  canvas.style.width  = cssW + 'px';
+  canvas.style.height = cssH + 'px';
+
+  // Physical buffer = CSS size × DPR → canvas pixels match screen pixels exactly
+  canvas.width  = Math.round(cssW * dpr);
+  canvas.height = Math.round(cssH * dpr);
+
+  // ctx scale: game logic runs in 900×560 coords, maps to physical buffer
+  renderDPR = canvas.width / W;
 }
 window.addEventListener('resize', resizeCanvas);
 resizeCanvas();
@@ -2015,47 +2022,68 @@ function drawTitle() {
 
   ctx.textAlign = 'center';
 
-  // Game title — two lines
+  // Title — tight two-line stack
   ctx.fillStyle = '#FFB3C6';
-  ctx.font = px(16);
-  ctx.shadowColor = '#FF6B9D'; ctx.shadowBlur = 18;
-  ctx.fillText('BINDINGS OF', W/2, 170);
+  ctx.font = px(14);
+  ctx.shadowColor = '#FF6B9D'; ctx.shadowBlur = 14;
+  ctx.fillText('Bindings of', W/2, 155);
   ctx.shadowBlur = 0; ctx.shadowColor = 'transparent';
 
   ctx.fillStyle = '#FFF5E4';
-  ctx.font = px(24);
-  ctx.shadowColor = '#FFB3C6'; ctx.shadowBlur = 20;
-  ctx.fillText('NOPEYEP', W/2, 220);
+  ctx.font = px(28);
+  ctx.shadowColor = '#FFB3C6'; ctx.shadowBlur = 22;
+  ctx.fillText('NopeYep', W/2, 205);
   ctx.shadowBlur = 0; ctx.shadowColor = 'transparent';
 
-  // Subtitle
+  // Subtitle — smaller, directly under title
   ctx.fillStyle = '#C9B1FF';
-  ctx.font = px(14);
-  ctx.fillText('a birthday game made for NopeYep', W/2, 262);
+  ctx.font = px(8);
+  ctx.fillText('A birthday game made for NopeYep', W/2, 238);
 
-  // Controls box
-  ctx.fillStyle = 'rgba(255,179,198,0.1)';
-  roundRect(ctx, W/2-200, 288, 400, 90, 10);
+  // Divider line
+  ctx.strokeStyle = 'rgba(255,179,198,0.25)';
+  ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(W/2-180, 258); ctx.lineTo(W/2+180, 258); ctx.stroke();
+
+  // Controls box — larger, better spacing
+  ctx.fillStyle = 'rgba(255,179,198,0.07)';
+  roundRect(ctx, W/2-220, 272, 440, 136, 12);
   ctx.fill();
-  ctx.strokeStyle = 'rgba(255,179,198,0.3)';
+  ctx.strokeStyle = 'rgba(255,179,198,0.25)';
   ctx.lineWidth = 1;
   ctx.stroke();
 
   ctx.fillStyle = '#FFD6E0';
-  ctx.font = px(11);
-  ctx.fillText('HOW TO PLAY', W/2, 310);
-  ctx.fillStyle = '#C7F0BD';
   ctx.font = px(9);
-  ctx.fillText('WASD  move             ARROWS  shoot', W/2, 334);
-  ctx.fillText('E  interact            ESC  close popup', W/2, 352);
-  ctx.fillText('clear rooms for upgrades - reach the garden', W/2, 370);
+  ctx.fillText('How to Play', W/2, 296);
+
+  ctx.fillStyle = '#C7F0BD';
+  ctx.font = px(8);
+  const col1 = W/2 - 90, col2 = W/2 + 90;
+  // Two-column layout
+  ctx.textAlign = 'right';
+  ctx.fillText('WASD', col1 - 8, 322);
+  ctx.fillText('Arrows', col1 - 8, 344);
+  ctx.fillText('E', col1 - 8, 366);
+  ctx.fillText('Esc', col1 - 8, 388);
+  ctx.textAlign = 'left';
+  ctx.fillStyle = '#FFF5E4';
+  ctx.fillText('Move', col1, 322);
+  ctx.fillText('Shoot', col1, 344);
+  ctx.fillText('Interact', col1, 366);
+  ctx.fillText('Close', col1, 388);
+
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#C9B1FF';
+  ctx.font = px(7);
+  ctx.fillText('Clear rooms for upgrades · Reach the Secret Garden', W/2, 410);
 
   // Blinking prompt
   if (Math.floor(frameCount/30)%2 === 0) {
     ctx.fillStyle = '#FF8B6A';
-    ctx.font = px(12);
+    ctx.font = px(11);
     ctx.shadowColor = '#FF8B6A'; ctx.shadowBlur = 12;
-    ctx.fillText('PRESS ENTER TO START', W/2, 438);
+    ctx.fillText('Press Enter to Start', W/2, 468);
     ctx.shadowBlur = 0; ctx.shadowColor = 'transparent';
   }
   ctx.textAlign = 'left';
