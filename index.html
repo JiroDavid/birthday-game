@@ -221,6 +221,65 @@ function clampToRoom(obj, radius) {
   obj.y = Math.max(PF_TOP + TILE + radius, Math.min(H - TILE - radius, obj.y));
 }
 
+function checkDoorTrigger() {
+  if (!currentRoom || !currentRoom.cleared) return;
+  const m = 14;
+  const checks = [
+    { cond: player.y < PF_TOP+TILE+m && player.x>W/2-30 && player.x<W/2+30, dir:'north', entry:{x:W/2,y:H-TILE*2} },
+    { cond: player.y > H-TILE-m       && player.x>W/2-30 && player.x<W/2+30, dir:'south', entry:{x:W/2,y:PF_TOP+TILE*2} },
+    { cond: player.x > W-TILE-m       && player.y>H/2-30 && player.y<H/2+30, dir:'east',  entry:{x:TILE*2,y:H/2} },
+    { cond: player.x < TILE+m         && player.y>H/2-30 && player.y<H/2+30, dir:'west',  entry:{x:W-TILE*2,y:H/2} },
+  ];
+  for (const c of checks) {
+    if (!c.cond) continue;
+    const targetIdx = currentRoom.doors[c.dir];
+    if (targetIdx === null) continue;
+    transition.entryPos = c.entry;
+    startTransition(targetIdx);
+    return;
+  }
+}
+
+function startTransition(targetIdx) {
+  transition.active = true;
+  transition.progress = 0;
+  transition.fromIdx = currentRoomIdx;
+  transition.toIdx = targetIdx;
+  transition.dir = targetIdx > currentRoomIdx ? -1 : 1;
+  gameState = 'TRANSITION';
+}
+
+function updateTransition() {
+  transition.progress++;
+  if (transition.progress >= transition.duration) {
+    transition.active = false;
+    loadRoom(transition.toIdx);
+    if (transition.entryPos) {
+      player.x = transition.entryPos.x;
+      player.y = transition.entryPos.y;
+    }
+    if (ROOM_GRAPH[transition.toIdx].type === 'boss') {
+      gameState = 'BOSS_INTRO';
+      bossIntro.timer = 0;
+    } else {
+      gameState = 'PLAYING';
+    }
+  }
+}
+
+function drawTransition() {
+  const t = transition.progress / transition.duration;
+  const offset = t * W * transition.dir;
+  ctx.save();
+  ctx.translate(offset, 0);
+  drawRoom(ROOM_GRAPH[transition.fromIdx]);
+  ctx.restore();
+  ctx.save();
+  ctx.translate(offset + W * -transition.dir, 0);
+  drawRoom(ROOM_GRAPH[transition.toIdx]);
+  ctx.restore();
+}
+
 // ─── ENEMIES ──────────────────────────────────────────────────────────────
 function enemyRadius(e) {
   return e.type === 'fly' ? 10 : e.type === 'tank' ? 22 : 14;
@@ -251,19 +310,24 @@ function updateGrub(e) {
 function update() {
   frameCount++;
   Object.keys(keysJustPressed).forEach(k => delete keysJustPressed[k]);
+
   if (gameState === 'TITLE') return;
+  if (gameState === 'TRANSITION') { updateTransition(); return; }
+  if (gameState === 'BOSS_INTRO') { updateBossIntro(); return; }
+  if (gameState === 'SKILL_PICKUP') { updateSkillPickup(); return; }
+  if (gameState === 'POPUP' || gameState === 'CELEBRATION') return;
 
   if (gameState === 'PLAYING') {
     updatePlayer();
-    for (let i = enemies.length - 1; i >= 0; i--) {
+    for (let i = enemies.length-1; i >= 0; i--) {
       const e = enemies[i];
-      if (e.type === 'grub') updateGrub(e);
-      // fly and tank added in Task 5
+      if (e.type==='grub') updateGrub(e);
     }
     updateTears();
     updateParticles();
     checkTearEnemyCollisions();
     checkPlayerEnemyCollisions();
+    checkDoorTrigger();
   }
 }
 
@@ -411,23 +475,25 @@ function render() {
   if (screenShake.timer > 0) {
     ctx.translate(screenShake.x, screenShake.y);
     screenShake.timer--;
-    screenShake.x = (Math.random() - 0.5) * screenShake.timer * 0.5;
-    screenShake.y = (Math.random() - 0.5) * screenShake.timer * 0.5;
-    if (screenShake.timer <= 0) { screenShake.x = 0; screenShake.y = 0; }
+    screenShake.x = (Math.random()-0.5)*screenShake.timer*0.5;
+    screenShake.y = (Math.random()-0.5)*screenShake.timer*0.5;
+    if (screenShake.timer<=0) { screenShake.x=0; screenShake.y=0; }
   }
-  ctx.clearRect(-10, -10, W + 20, H + 20);
+  ctx.clearRect(-10,-10,W+20,H+20);
 
-  if (gameState === 'TITLE') { drawTitle(); ctx.restore(); return; }
+  if (gameState==='TITLE') { drawTitle(); ctx.restore(); return; }
 
-  // Playfield background
-  ctx.fillStyle = '#1e3a1e';
-  ctx.fillRect(0, PF_TOP, W, H - PF_TOP);
+  if (gameState==='TRANSITION') { drawTransition(); drawHUD(); ctx.restore(); return; }
 
-  drawTears();
+  if (currentRoom) drawRoom(currentRoom);
   enemies.forEach(drawEnemy);
+  drawTears();
   drawPlayer();
   drawParticles();
   drawHUD();
+
+  if (gameState==='SKILL_PICKUP') { drawSkillPickup(); ctx.restore(); return; }
+  if (gameState==='BOSS_INTRO')   { drawBossIntro();   ctx.restore(); return; }
 
   ctx.restore();
 }
@@ -486,8 +552,11 @@ function checkRoomClear() {
   if (enemies.length > 0 || boss !== null) return;
   if (currentRoom.cleared) return;
   currentRoom.cleared = true;
-  // Skill pickup state and door unlock handled in Task 4.
-  // For now just mark cleared so doors open visually (Task 4 draws doors).
+  if (skillPool.length >= 2 && currentRoom.type !== 'start' && currentRoom.type !== 'garden') {
+    skillPickupState.choices = [skillPool.pop(), skillPool.pop()];
+    skillPickupState.selected = 0;
+    gameState = 'SKILL_PICKUP';
+  }
 }
 
 function damageEnemy(e, tearVx, tearVy, idx) {
@@ -568,6 +637,144 @@ function checkPlayerEnemyCollisions() {
 
 // ─── DRAWING ──────────────────────────────────────────────────────────────
 function px(size) { return `${size}px 'Press Start 2P', monospace`; }
+
+function drawRoom(room) {
+  for (let ty = 0; ty < ROWS; ty++) {
+    for (let tx = 0; tx < COLS; tx++) {
+      const rx = tx * TILE, ry = PF_TOP + ty * TILE;
+      if (tx === 0 || tx === COLS-1 || ty === 0 || ty === ROWS-1) {
+        ctx.fillStyle = '#4a4a3a';
+        ctx.fillRect(rx, ry, TILE, TILE);
+        ctx.fillStyle = '#5a5a4a';
+        ctx.fillRect(rx+2, ry+2, TILE-4, TILE-4);
+        ctx.strokeStyle = '#3a3a2a'; ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(rx+8, ry+4); ctx.lineTo(rx+20, ry+14);
+        ctx.moveTo(rx+TILE-10, ry+TILE-8); ctx.lineTo(rx+TILE-22, ry+TILE-18);
+        ctx.stroke();
+      } else if (room.obstacles.some(([ox,oy]) => ox===tx && oy===ty)) {
+        ctx.fillStyle = '#2a4a2a';
+        ctx.fillRect(rx, ry, TILE, TILE);
+        ctx.fillStyle = '#3a6a3a';
+        ctx.beginPath(); ctx.arc(rx+TILE/2, ry+TILE/2, 22, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = '#4a8a4a';
+        ctx.beginPath(); ctx.arc(rx+TILE/2, ry+TILE/2-4, 16, 0, Math.PI*2); ctx.fill();
+      } else {
+        ctx.fillStyle = (tx+ty)%2===0 ? '#2a5a2a' : '#2e6430';
+        ctx.fillRect(rx, ry, TILE, TILE);
+      }
+    }
+  }
+
+  // Doors
+  const doorDefs = {
+    north: { x: W/2-30, y: PF_TOP,     w: 60, h: TILE },
+    south: { x: W/2-30, y: H-TILE,     w: 60, h: TILE },
+    east:  { x: W-TILE, y: H/2-30,     w: TILE, h: 60 },
+    west:  { x: 0,      y: H/2-30,     w: TILE, h: 60 },
+  };
+  Object.entries(room.doors).forEach(([dir, targetIdx]) => {
+    if (targetIdx === null) return;
+    const d = doorDefs[dir];
+    const locked = !room.cleared;
+    ctx.fillStyle = locked ? '#5a1a1a' : '#4a7a2a';
+    ctx.fillRect(d.x, d.y, d.w, d.h);
+    if (locked) {
+      ctx.strokeStyle = '#883333'; ctx.lineWidth = 3;
+      const isVert = dir==='north'||dir==='south';
+      for (let i=0; i<3; i++) {
+        const off = 12+i*14;
+        ctx.beginPath();
+        if (isVert) { ctx.moveTo(d.x+off, d.y); ctx.lineTo(d.x+off, d.y+d.h); }
+        else        { ctx.moveTo(d.x, d.y+off); ctx.lineTo(d.x+d.w, d.y+off); }
+        ctx.stroke();
+      }
+    }
+  });
+
+  // Vignette
+  const grad = ctx.createRadialGradient(W/2,H/2,H*0.25,W/2,H/2,H*0.75);
+  grad.addColorStop(0,'rgba(0,0,0,0)');
+  grad.addColorStop(1,'rgba(0,0,0,0.45)');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, PF_TOP, W, H-PF_TOP);
+}
+
+const SKILL_META = {
+  homing:    { icon:'🎯', name:'HOMING TEARS',    desc:'Tears curve toward nearest enemy' },
+  explosive: { icon:'💥', name:'EXPLOSIVE TEARS', desc:'Burst into 4 shards on impact' },
+  piercing:  { icon:'👻', name:'PIERCING TEARS',  desc:'Pass through all enemies' },
+  orbital:   { icon:'🛡️', name:'ORBITAL SHIELD', desc:'2 orbs orbit and damage enemies' },
+  freeze:    { icon:'❄️', name:'FREEZE TEARS',    desc:'Slow enemies by 60% on hit' },
+  boomerang: { icon:'🔄', name:'BOOMERANG TEARS', desc:'Return at max range, hit twice' },
+  triple:    { icon:'🌀', name:'TRIPLE SHOT',     desc:'Fire 3 tears in a spread' },
+  speed:     { icon:'⚡', name:'SPEED TEARS',     desc:'Tears move 80% faster' },
+};
+
+function updateSkillPickup() {
+  if (keysJustPressed['ArrowLeft'])  skillPickupState.selected = 0;
+  if (keysJustPressed['ArrowRight']) skillPickupState.selected = 1;
+  if (keysJustPressed['e'] || keysJustPressed['E'] || keysJustPressed['Enter']) {
+    applySkill(skillPickupState.choices[skillPickupState.selected]);
+    skillPickupState.choices = [];
+    gameState = 'PLAYING';
+  }
+}
+
+function drawSkillPickup() {
+  ctx.fillStyle = 'rgba(0,10,0,0.75)';
+  ctx.fillRect(0, 0, W, H);
+  ctx.save();
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#e8c547'; ctx.font = px(10);
+  ctx.fillText('❖ UPGRADE ❖', W/2, 140);
+  ctx.fillStyle = '#888'; ctx.font = px(6);
+  ctx.fillText('Room cleared! Choose a power-up.', W/2, 168);
+
+  skillPickupState.choices.forEach((skillId, i) => {
+    const meta = SKILL_META[skillId];
+    const cardW=200, cardH=160;
+    const cx = W/2 + (i===0 ? -cardW/2-16 : cardW/2+16);
+    const cy = H/2;
+    const sel = skillPickupState.selected===i;
+    ctx.fillStyle = sel ? '#0a200a' : '#0d1a0d';
+    ctx.strokeStyle = sel ? '#e8c547' : '#3a5a3a';
+    ctx.lineWidth = sel ? 3 : 1;
+    roundRect(ctx, cx-cardW/2, cy-cardH/2, cardW, cardH, 8);
+    ctx.fill(); ctx.stroke();
+    ctx.font='32px serif'; ctx.fillText(meta.icon, cx, cy-40);
+    ctx.fillStyle = sel ? '#e8c547':'#a0c87a'; ctx.font=px(7);
+    ctx.fillText(meta.name, cx, cy-5);
+    ctx.fillStyle='#888'; ctx.font=px(5);
+    wrapText(ctx, meta.desc, cx, cy+20, cardW-20, 14);
+  });
+
+  ctx.fillStyle='#555'; ctx.font=px(5);
+  ctx.fillText('[← →] navigate   [E] pick', W/2, H-80);
+  ctx.restore();
+}
+
+function updateBossIntro() {
+  bossIntro.timer++;
+  if (bossIntro.timer >= bossIntro.duration) gameState = 'PLAYING';
+}
+
+function drawBossIntro() {
+  ctx.fillStyle = 'rgba(0,0,0,0.85)';
+  ctx.fillRect(0, 0, W, H);
+  const alpha = Math.min(1, bossIntro.timer/20);
+  ctx.save(); ctx.globalAlpha = alpha; ctx.textAlign='center';
+  ctx.fillStyle='#cc3333'; ctx.font=px(9);
+  ctx.fillText('BLOOM', W/2, H/2-20);
+  ctx.fillStyle='#888'; ctx.font=px(6);
+  ctx.fillText("She's here to protect her slimes...", W/2, H/2+20);
+  ctx.restore();
+}
+
+function applySkill(skillId) {
+  player.skills[skillId] = true;
+  spawnParticles(player.x, player.y, '#e8c547', 20, 5, 30);
+}
 
 function drawPlayer() {
   ctx.save();
@@ -667,6 +874,29 @@ function drawParticles() {
   });
 }
 
+function drawMinimap() {
+  const cellW=18, cellH=12, gap=2;
+  const startX = W-10-(6*(cellW+gap));
+  const startY = 4;
+  ROOM_GRAPH.forEach((room,i) => {
+    const rx = startX+i*(cellW+gap), ry = startY;
+    if (!room.visited)         ctx.fillStyle = '#1a1a1a';
+    else if (room.type==='garden') ctx.fillStyle = '#2a6a3a';
+    else if (room.cleared)     ctx.fillStyle = '#556655';
+    else                       ctx.fillStyle = '#886644';
+    ctx.fillRect(rx, ry, cellW, cellH);
+    if (i===currentRoomIdx) {
+      ctx.strokeStyle='#e8c547'; ctx.lineWidth=2;
+      ctx.strokeRect(rx, ry, cellW, cellH);
+    }
+    if (room.type==='garden' && room.visited) {
+      ctx.font='9px serif'; ctx.textAlign='center';
+      ctx.fillText('🎂', rx+cellW/2, ry+cellH-1);
+      ctx.textAlign='left';
+    }
+  });
+}
+
 function drawHUD() {
   ctx.save();
   ctx.fillStyle = '#0d1a0d';
@@ -694,6 +924,7 @@ function drawHUD() {
   ctx.textAlign = 'center';
   ctx.fillText(currentRoom ? currentRoom.name : '', W / 2, 13);
   ctx.restore();
+  drawMinimap();
 }
 
 function roundRect(ctx, x, y, w, h, r) {
