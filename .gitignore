@@ -9,6 +9,9 @@ Thumbs.db
 # Unity (abandoned)
 unity/
 
+# Downloaded sprite packs (not used — art is procedural)
+sprites/
+
 # Visual brainstorming companion (generated, not source)
 .superpowers/
 
