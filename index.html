@@ -66,6 +66,27 @@ const CONFIG = {
   },
 };
 
+// ─── ASSETS ───────────────────────────────────────────────────────────────
+function loadImage(src, callback) {
+  const img = new Image();
+  img.onload = () => callback(img);
+  img.onerror = () => callback(img); // pass even on error so callers can check naturalWidth
+  img.src = src;
+}
+
+// Bloom (boss + grub variant) sprite sheets
+const bloomSprites = {};
+const bloomPaths = {
+  crawl:  'sprites/Momo-Mama/Momo-Mama/momo mama/mm-crawl.png',
+  attack: 'sprites/Momo-Mama/Momo-Mama/momo mama/mm-generic attack.png',
+  jump:   'sprites/Momo-Mama/Momo-Mama/momo mama/mm-jump.png',
+  hurt:   'sprites/Momo-Mama/Momo-Mama/momo mama/mm-hurt.png',
+  happy:  'sprites/Momo-Mama/Momo-Mama/EXTRAS/mm-happy.png',
+};
+Object.entries(bloomPaths).forEach(([key, src]) => loadImage(src, img => { bloomSprites[key] = img; }));
+const BLOOM_FRAMES = { crawl:5, attack:7, jump:6, hurt:6, happy:5 };
+const BLOOM_FS = 64; // frame size in spritesheet
+
 // ─── STATE ────────────────────────────────────────────────────────────────
 let gameState = 'TITLE'; // TITLE | PLAYING | TRANSITION | SKILL_PICKUP | BOSS_INTRO | POPUP | CELEBRATION
 
@@ -105,6 +126,7 @@ let skillPool = [];
 const popupState = { type: null, index: 0 };
 const bossIntro = { timer: 0, duration: 120 };
 const confettiParticles = [];
+let pet = { x: 0, y: 0, active: false, befriended: false, bounceTimer: 0 };
 
 // ─── ROOMS ────────────────────────────────────────────────────────────────
 const ROOM_GRAPH = [
@@ -388,11 +410,22 @@ function update() {
       else if (e.type==='fly')  updateFly(e);
       else if (e.type==='tank') updateTank(e);
     }
+    if (boss) updateBloom();
+    updatePet();
     updateTears();
     updateParticles();
     checkTearEnemyCollisions();
     checkPlayerEnemyCollisions();
     checkDoorTrigger();
+    // Pet befriend (E key)
+    if (keysJustPressed['e'] || keysJustPressed['E']) {
+      if (pet.active && !pet.befriended &&
+          Math.hypot(player.x - pet.x, player.y - pet.y) < 48) {
+        pet.befriended = true;
+        spawnParticles(pet.x, pet.y, '#cc66ff', 15, 4, 30);
+      }
+      // Note: board/throne interaction handled in Task 9 (tryInteract)
+    }
   }
 }
 
@@ -552,6 +585,8 @@ function render() {
 
   if (currentRoom) drawRoom(currentRoom);
   enemies.forEach(drawEnemy);
+  if (boss) { drawBloom(); drawBossHPBar(); }
+  drawPet();
   drawTears();
   drawPlayer();
   drawOrbitals();
@@ -601,13 +636,148 @@ function initGame() {
   confettiParticles.length = 0;
   currentRoomIdx = 0;
   boss = null;
+  pet.active = false; pet.befriended = false; pet.bounceTimer = 0;
   gameState = 'PLAYING';
   loadRoom(0);
 }
 
 function initBoss() {
-  // Minimal placeholder so boss room doesn't auto-clear before Task 7 is implemented
-  boss = { hp: 24, maxHP: 24, x: W/2, y: 220, projectiles: [], hitFlash: 0, orbitalCooldown: 0 };
+  boss = {
+    x: W/2, y: 220,
+    hp: 24, maxHP: 24,
+    phase: 1,
+    speed: 0.9,
+    jumpTimer: 180,
+    telegraphTimer: 0,
+    telegraphing: false,
+    shadowX: 0, shadowY: 0,
+    jumpInFlight: false,
+    jumpT: 0,
+    startX: 0, startY: 0,
+    hitFlash: 0,
+    slowTimer: 0,
+    spawnedMinions: false,
+    knockVx: 0, knockVy: 0,
+    projectiles: [],
+    animFrame: 0,
+    animTimer: 0,
+    orbitalCooldown: 0,
+  };
+}
+
+function updateBloom() {
+  if (!boss) return;
+  if (boss.hitFlash > 0) boss.hitFlash--;
+  if (boss.slowTimer > 0) boss.slowTimer--;
+  if (boss.orbitalCooldown > 0) boss.orbitalCooldown--;
+
+  // Animate frames
+  boss.animTimer++;
+  if (boss.animTimer >= 8) { boss.animTimer = 0; boss.animFrame++; }
+
+  // Arc jump in flight — skip other movement
+  if (boss.jumpInFlight) {
+    boss.jumpT += 0.06;
+    boss.x = boss.startX + (boss.shadowX - boss.startX) * boss.jumpT;
+    boss.y = boss.startY + (boss.shadowY - boss.startY) * boss.jumpT
+             - Math.sin(boss.jumpT * Math.PI) * 80;
+    if (boss.jumpT >= 1) {
+      boss.jumpInFlight = false;
+      boss.x = boss.shadowX; boss.y = boss.shadowY;
+      const shakeMag = boss.phase === 2 ? 12 : 8;
+      startShake(shakeMag, boss.phase === 2 ? 20 : 14);
+      spawnParticles(boss.x, boss.y, '#aa44ee', 20, 8, 40);
+      spawnParticles(boss.x, boss.y, '#44ee88', 15, 6, 35);
+      // Phase 2: aimed blob on landing
+      if (boss.phase === 2) {
+        const dx = player.x - boss.x, dy = player.y - boss.y;
+        const len = Math.hypot(dx, dy) || 1;
+        boss.projectiles.push({
+          x: boss.x, y: boss.y,
+          vx: (dx/len)*3.5, vy: (dy/len)*3.5,
+          life: 150, color: '#aa44ee',
+        });
+      }
+    }
+    updateBossProjectiles();
+    return;
+  }
+
+  // Crawl toward player
+  const speed = boss.speed * (boss.slowTimer > 0 ? 0.4 : 1) * (boss.phase === 2 ? 1.55 : 1);
+  const dx = player.x - boss.x, dy = player.y - boss.y;
+  const len = Math.hypot(dx, dy) || 1;
+  boss.knockVx *= 0.85; boss.knockVy *= 0.85;
+  boss.x += (dx/len)*speed + boss.knockVx;
+  boss.y += (dy/len)*speed + boss.knockVy;
+  clampToRoom(boss, 45);
+
+  // Phase 2 transition
+  if (boss.phase === 1 && boss.hp <= 12) {
+    boss.phase = 2;
+    boss.animFrame = 0;
+    startShake(12, 20);
+    if (!boss.spawnedMinions) {
+      boss.spawnedMinions = true;
+      spawnEnemy('grub', boss.x - 120, boss.y + 80);
+      spawnEnemy('grub', boss.x + 120, boss.y + 80);
+      spawnEnemy('grub', boss.x, boss.y + 120);
+    }
+  }
+
+  // Jump telegraph
+  boss.jumpTimer--;
+  if (!boss.telegraphing && boss.jumpTimer <= 60) {
+    boss.telegraphing = true;
+    boss.telegraphTimer = 60;
+    boss.shadowX = player.x; boss.shadowY = player.y;
+  }
+  if (boss.telegraphing) {
+    boss.telegraphTimer--;
+    if (boss.telegraphTimer <= 0) {
+      boss.telegraphing = false;
+      boss.jumpInFlight = true;
+      boss.jumpT = 0;
+      boss.startX = boss.x; boss.startY = boss.y;
+      boss.jumpTimer = boss.phase === 2 ? 120 : 180;
+      boss.animFrame = 0;
+    }
+  }
+
+  updateBossProjectiles();
+}
+
+function updateBossProjectiles() {
+  if (!boss) return;
+  for (let i = boss.projectiles.length - 1; i >= 0; i--) {
+    const p = boss.projectiles[i];
+    p.x += p.vx; p.y += p.vy; p.life--;
+    if (p.life <= 0 || p.x < 0 || p.x > W || p.y < PF_TOP || p.y > H) {
+      boss.projectiles.splice(i, 1); continue;
+    }
+    if (player.iframes <= 0 && Math.hypot(p.x - player.x, p.y - player.y) < 12 + 16) {
+      player.hp--;
+      player.iframes = CONFIG.player.iframeDuration;
+      startShake(4, 8);
+      boss.projectiles.splice(i, 1);
+      if (player.hp <= 0) gameState = 'TITLE';
+    }
+  }
+}
+
+function updatePet() {
+  if (!pet.active) return;
+  pet.bounceTimer++;
+  if (!pet.befriended) return;
+  // Follow player with lag, trailing ~60px behind
+  const dx = player.x - pet.x, dy = player.y - pet.y;
+  const dist = Math.hypot(dx, dy);
+  const targetDist = 60;
+  if (dist > targetDist + 5) {
+    const speed = Math.min((dist - targetDist) * 0.1, 4);
+    pet.x += (dx/dist) * speed;
+    pet.y += (dy/dist) * speed;
+  }
 }
 
 (function loop() {
@@ -639,6 +809,14 @@ function damageEnemy(e, tearVx, tearVy, idx) {
 }
 
 function killBoss() {
+  if (!boss) return;
+  spawnParticles(boss.x, boss.y, '#aa44ee', 40, 8, 60);
+  spawnParticles(boss.x, boss.y, '#44ee88', 20, 6, 50);
+  spawnParticles(boss.x, boss.y, '#ffffff', 15, 5, 45);
+  startShake(15, 30);
+  // Spawn befriendable mini Bloom at boss position
+  pet.x = boss.x; pet.y = boss.y;
+  pet.active = true; pet.befriended = false; pet.bounceTimer = 0;
   boss = null;
   checkRoomClear();
 }
@@ -686,7 +864,30 @@ function checkTearEnemyCollisions() {
       }
     }
     if (tearUsed) continue;
-    // Boss tear collision handled in Task 7
+    // Boss tear collision
+    if (boss && boss.hp > 0 && !tearUsed) {
+      if (Math.hypot(t.x - boss.x, t.y - boss.y) < t.radius + 45) {
+        if (player.skills.freeze) boss.slowTimer = 120;
+        boss.hp--;
+        boss.hitFlash = 6;
+        const len = Math.hypot(t.vx, t.vy) || 1;
+        boss.knockVx = (t.vx/len) * 2; boss.knockVy = (t.vy/len) * 2;
+        if (player.skills.explosive) {
+          [[1,0],[-1,0],[0,1],[0,-1]].forEach(([sx,sy]) => {
+            tears.push({ x:t.x, y:t.y, vx:sx*5, vy:sy*5,
+                         life:18, lifespan:18, radius:t.radius,
+                         hitEnemies:new Set(['boss']), returning:false });
+          });
+        }
+        impactParticles(t.x, t.y, '#ffaaaa');
+        if (!player.skills.piercing) {
+          tears.splice(ti, 1);
+        } else {
+          t.hitEnemies.add('boss');
+        }
+        if (boss && boss.hp <= 0) killBoss();
+      }
+    }
   }
 }
 
@@ -888,7 +1089,7 @@ function updateOrbitals() {
           if (boss.hp <= 0) killBoss();
         }
       }
-      if (boss && boss.orbitalCooldown > 0) boss.orbitalCooldown--;
+      // orbitalCooldown decrement handled by updateBloom()
     }
   }
 }
@@ -1139,6 +1340,111 @@ function wrapText(ctx, text, cx, y, maxW, lineH) {
     } else { line = test; }
   });
   ctx.fillText(line.trim(), cx, y);
+}
+
+function drawBloom() {
+  if (!boss) return;
+  ctx.save();
+
+  // Telegraph shadow at target position
+  if (boss.telegraphing) {
+    const pulse = 0.5 + 0.5 * Math.abs(Math.sin(frameCount * 0.15));
+    ctx.globalAlpha = 0.5 * pulse;
+    ctx.fillStyle = '#220022';
+    ctx.beginPath(); ctx.ellipse(boss.shadowX, boss.shadowY, 40, 20, 0, 0, Math.PI*2); ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+
+  ctx.translate(boss.x, boss.y);
+
+  // Pick animation sheet
+  let sheet = null, frames = 1;
+  if (boss.hitFlash > 0 && bloomSprites.hurt)        { sheet = bloomSprites.hurt;   frames = BLOOM_FRAMES.hurt; }
+  else if (boss.jumpInFlight && bloomSprites.jump)    { sheet = bloomSprites.jump;   frames = BLOOM_FRAMES.jump; }
+  else if (boss.phase === 2 && bloomSprites.attack)   { sheet = bloomSprites.attack; frames = BLOOM_FRAMES.attack; }
+  else if (bloomSprites.crawl)                         { sheet = bloomSprites.crawl;  frames = BLOOM_FRAMES.crawl; }
+
+  const frame = Math.floor(boss.animFrame % frames);
+  const half = 64; // display at 128×128 (2× of 64px frames)
+
+  if (sheet && sheet.naturalWidth > 0) {
+    if (boss.hitFlash > 0) { ctx.filter = 'brightness(10)'; }
+    ctx.drawImage(sheet, frame * BLOOM_FS, 0, BLOOM_FS, BLOOM_FS, -half, -half, half*2, half*2);
+    ctx.filter = 'none';
+  } else {
+    // Canvas fallback blob
+    const wobble = Math.sin(frameCount * 0.1) * 4;
+    ctx.fillStyle = boss.hitFlash > 0 ? '#fff' : (boss.phase===2 ? '#882299' : '#aa44ee');
+    ctx.beginPath(); ctx.ellipse(0, wobble/2, 38+wobble, 35-wobble/2, 0, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.3)';
+    ctx.beginPath(); ctx.ellipse(-10,-12,12,8,-0.4,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='#fff';
+    ctx.beginPath(); ctx.arc(-13,-5,9,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(13,-5,9,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle = boss.phase===2 ? '#ff0000':'#222';
+    ctx.beginPath(); ctx.arc(-11,-5,5,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(15,-5,5,0,Math.PI*2); ctx.fill();
+  }
+  ctx.restore();
+
+  // Projectiles
+  boss.projectiles.forEach(p => {
+    ctx.save();
+    ctx.fillStyle = p.color || '#aa44ee';
+    ctx.shadowColor = p.color; ctx.shadowBlur = 6;
+    ctx.beginPath(); ctx.arc(p.x, p.y, 7, 0, Math.PI*2); ctx.fill();
+    ctx.restore();
+  });
+}
+
+function drawBossHPBar() {
+  if (!boss) return;
+  ctx.save();
+  const barW = 400, barH = 14;
+  const bx = W/2 - barW/2, by = H - 30;
+  ctx.fillStyle = '#1a0a0a'; ctx.fillRect(bx-2, by-2, barW+4, barH+4);
+  ctx.fillStyle = '#660000'; ctx.fillRect(bx, by, barW, barH);
+  const hpW = Math.max(0, (boss.hp/boss.maxHP)) * barW;
+  ctx.fillStyle = boss.hp > 12 ? '#cc3333' : '#ff6666';
+  ctx.fillRect(bx, by, hpW, barH);
+  ctx.fillStyle = '#e8c547'; ctx.font = px(5); ctx.textAlign = 'center';
+  ctx.fillText('BLOOM', W/2, by - 6);
+  ctx.restore();
+}
+
+function drawPet() {
+  if (!pet.active) return;
+  const bounce = Math.sin(pet.bounceTimer * 0.08) * 3;
+  ctx.save();
+  ctx.translate(pet.x, pet.y + bounce);
+
+  const sheet = bloomSprites.happy;
+  const frame = Math.floor(pet.bounceTimer / 10) % BLOOM_FRAMES.happy;
+  const petSize = 48;
+
+  if (sheet && sheet.naturalWidth > 0) {
+    ctx.drawImage(sheet, frame * BLOOM_FS, 0, BLOOM_FS, BLOOM_FS,
+                  -petSize/2, -petSize/2, petSize, petSize);
+  } else {
+    ctx.fillStyle = '#cc66ff';
+    ctx.beginPath(); ctx.ellipse(0,0,16,13,0,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='rgba(255,255,255,0.3)';
+    ctx.beginPath(); ctx.ellipse(-5,-5,5,3,-0.4,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='#fff';
+    ctx.beginPath(); ctx.arc(-6,-2,4,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(6,-2,4,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='#220033';
+    ctx.beginPath(); ctx.arc(-5,-2,2.5,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(7,-2,2.5,0,Math.PI*2); ctx.fill();
+  }
+
+  // [E] prompt when not yet befriended and player nearby
+  if (!pet.befriended && Math.hypot(player.x - pet.x, player.y - pet.y) < 48) {
+    ctx.fillStyle = '#fff'; ctx.font = '9px "Press Start 2P",monospace';
+    ctx.textAlign = 'center'; ctx.fillText('[E] befriend', 0, -32);
+    ctx.textAlign = 'left';
+  }
+  ctx.restore();
 }
 
 function drawTitle() {
