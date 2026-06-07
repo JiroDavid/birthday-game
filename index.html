@@ -2045,9 +2045,9 @@ function drawTitle() {
   ctx.lineWidth = 1;
   ctx.beginPath(); ctx.moveTo(W/2-180, 258); ctx.lineTo(W/2+180, 258); ctx.stroke();
 
-  // Controls box — larger, better spacing
+  // Controls box
   ctx.fillStyle = 'rgba(255,179,198,0.07)';
-  roundRect(ctx, W/2-220, 272, 440, 136, 12);
+  roundRect(ctx, W/2-240, 272, 480, 110, 12);
   ctx.fill();
   ctx.strokeStyle = 'rgba(255,179,198,0.25)';
   ctx.lineWidth = 1;
@@ -2055,28 +2055,37 @@ function drawTitle() {
 
   ctx.fillStyle = '#FFD6E0';
   ctx.font = px(9);
-  ctx.fillText('How to Play', W/2, 296);
+  ctx.fillText('Controls', W/2, 296);
 
-  ctx.fillStyle = '#C7F0BD';
+  // Vertical divider
+  ctx.strokeStyle = 'rgba(255,179,198,0.2)';
+  ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(W/2, 308); ctx.lineTo(W/2, 370); ctx.stroke();
+
+  // Left column: WASD + E
+  const lx = W/2 - 120;
   ctx.font = px(8);
-  const col1 = W/2 - 90, col2 = W/2 + 90;
-  // Two-column layout
   ctx.textAlign = 'right';
-  ctx.fillText('WASD', col1 - 8, 322);
-  ctx.fillText('Arrows', col1 - 8, 344);
-  ctx.fillText('E', col1 - 8, 366);
-  ctx.fillText('Esc', col1 - 8, 388);
+  ctx.fillStyle = '#C7F0BD';
+  ctx.fillText('WASD', lx - 6, 328);
+  ctx.fillText('E', lx - 6, 356);
   ctx.textAlign = 'left';
   ctx.fillStyle = '#FFF5E4';
-  ctx.fillText('Move', col1, 322);
-  ctx.fillText('Shoot', col1, 344);
-  ctx.fillText('Interact', col1, 366);
-  ctx.fillText('Close', col1, 388);
+  ctx.fillText('Move', lx, 328);
+  ctx.fillText('Interact', lx, 356);
+
+  // Right column: Arrows + Esc
+  const rx = W/2 + 16;
+  ctx.textAlign = 'right';
+  ctx.fillStyle = '#C7F0BD';
+  ctx.fillText('Arrows', rx - 6, 328);
+  ctx.fillText('Esc', rx - 6, 356);
+  ctx.textAlign = 'left';
+  ctx.fillStyle = '#FFF5E4';
+  ctx.fillText('Shoot', rx, 328);
+  ctx.fillText('Close', rx, 356);
 
   ctx.textAlign = 'center';
-  ctx.fillStyle = '#C9B1FF';
-  ctx.font = px(7);
-  ctx.fillText('Clear rooms for upgrades · Reach the Secret Garden', W/2, 410);
 
   // Blinking prompt
   if (Math.floor(frameCount/30)%2 === 0) {
