@@ -1,6 +1,7 @@
 # OS
 .DS_Store
 Thumbs.db
+*:Zone.Identifier
 
 # Editor
 .vscode/
@@ -9,8 +10,14 @@ Thumbs.db
 # Unity (abandoned)
 unity/
 
-# Downloaded sprite packs (not used — art is procedural)
-sprites/
+# Sprite source/binary files (keep PNGs, skip everything else)
+sprites/**/*.aseprite
+sprites/**/*.ase
+sprites/**/*.psd
+sprites/**/*.pdf
+sprites/PSD/
+sprites/COUPON.*
+sprites/Font/
 
 # Visual brainstorming companion (generated, not source)
 .superpowers/
