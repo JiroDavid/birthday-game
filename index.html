@@ -539,7 +539,10 @@ function initGame() {
   loadRoom(0);
 }
 
-function initBoss() { /* implemented in Task 7 */ }
+function initBoss() {
+  // Minimal placeholder so boss room doesn't auto-clear before Task 7 is implemented
+  boss = { hp: 24, maxHP: 24, x: W/2, y: 220, projectiles: [] };
+}
 
 (function loop() {
   update();
@@ -760,13 +763,15 @@ function updateBossIntro() {
 }
 
 function drawBossIntro() {
+  ctx.save();
   ctx.fillStyle = 'rgba(0,0,0,0.85)';
   ctx.fillRect(0, 0, W, H);
   const alpha = Math.min(1, bossIntro.timer/20);
-  ctx.save(); ctx.globalAlpha = alpha; ctx.textAlign='center';
-  ctx.fillStyle='#cc3333'; ctx.font=px(9);
+  ctx.globalAlpha = alpha;
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#cc3333'; ctx.font = px(9);
   ctx.fillText('BLOOM', W/2, H/2-20);
-  ctx.fillStyle='#888'; ctx.font=px(6);
+  ctx.fillStyle = '#888'; ctx.font = px(6);
   ctx.fillText("She's here to protect her slimes...", W/2, H/2+20);
   ctx.restore();
 }
@@ -875,15 +880,16 @@ function drawParticles() {
 }
 
 function drawMinimap() {
+  ctx.save();
   const cellW=18, cellH=12, gap=2;
   const startX = W-10-(6*(cellW+gap));
   const startY = 4;
   ROOM_GRAPH.forEach((room,i) => {
     const rx = startX+i*(cellW+gap), ry = startY;
-    if (!room.visited)         ctx.fillStyle = '#1a1a1a';
+    if (!room.visited)             ctx.fillStyle = '#1a1a1a';
     else if (room.type==='garden') ctx.fillStyle = '#2a6a3a';
-    else if (room.cleared)     ctx.fillStyle = '#556655';
-    else                       ctx.fillStyle = '#886644';
+    else if (room.cleared)         ctx.fillStyle = '#556655';
+    else                           ctx.fillStyle = '#886644';
     ctx.fillRect(rx, ry, cellW, cellH);
     if (i===currentRoomIdx) {
       ctx.strokeStyle='#e8c547'; ctx.lineWidth=2;
@@ -892,9 +898,9 @@ function drawMinimap() {
     if (room.type==='garden' && room.visited) {
       ctx.font='9px serif'; ctx.textAlign='center';
       ctx.fillText('🎂', rx+cellW/2, ry+cellH-1);
-      ctx.textAlign='left';
     }
   });
+  ctx.restore();
 }
 
 function drawHUD() {
