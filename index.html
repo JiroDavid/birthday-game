@@ -306,6 +306,66 @@ function updateGrub(e) {
   if (e.hitFlash > 0) e.hitFlash--;
 }
 
+function updateFly(e) {
+  const slowMult = e.slowTimer > 0 ? 0.4 : 1;
+  if (e.slowTimer > 0) e.slowTimer--;
+  if (e.hitFlash > 0) e.hitFlash--;
+
+  if (e.phase === 'orbit') {
+    e.orbitAngle += 0.025 * slowMult;
+    const targetX = player.x + Math.cos(e.orbitAngle) * e.orbitRadius;
+    const targetY = player.y + Math.sin(e.orbitAngle) * e.orbitRadius;
+    const dx = targetX - e.x, dy = targetY - e.y;
+    const len = Math.hypot(dx, dy) || 1;
+    e.x += (dx/len) * 2.5 * slowMult;
+    e.y += (dy/len) * 2.5 * slowMult;
+    clampToRoom(e, 10);
+
+    if (e.orbitFrames === null) e.orbitFrames = 90 + Math.floor(Math.random() * 60);
+    e.orbitFrames--;
+    if (e.orbitFrames <= 0) {
+      e.phase = 'telegraph';
+      e.telegraphTimer = 40;
+    }
+  } else if (e.phase === 'telegraph') {
+    e.telegraphTimer--;
+    if (e.telegraphTimer <= 0) {
+      const dx = player.x - e.x, dy = player.y - e.y;
+      const len = Math.hypot(dx, dy) || 1;
+      e.dashVx = (dx/len) * 6;
+      e.dashVy = (dy/len) * 6;
+      e.dashTimer = 24;
+      e.phase = 'dash';
+    }
+  } else if (e.phase === 'dash') {
+    e.x += e.dashVx * slowMult;
+    e.y += e.dashVy * slowMult;
+    e.dashTimer--;
+    clampToRoom(e, 10);
+    if (e.dashTimer <= 0) {
+      e.phase = 'orbit';
+      e.orbitFrames = 90 + Math.floor(Math.random() * 60);
+    }
+  }
+}
+
+function updateTank(e) {
+  const speed = 0.7 * (e.slowTimer > 0 ? 0.4 : 1);
+  if (e.slowTimer > 0) e.slowTimer--;
+  if (e.hitFlash > 0) e.hitFlash--;
+  if (e.orbitalCooldown > 0) e.orbitalCooldown--;
+
+  const dx = player.x - e.x, dy = player.y - e.y;
+  const len = Math.hypot(dx, dy) || 1;
+  e.knockVx *= 0.8; e.knockVy *= 0.8;
+  // Tank ignores obstacles per spec
+  e.x += (dx/len)*speed + e.knockVx;
+  e.y += (dy/len)*speed + e.knockVy;
+  clampToRoom(e, 22);
+
+  e.pulseTimer = (e.pulseTimer + 1) % 60;
+}
+
 // ─── LOOP ─────────────────────────────────────────────────────────────────
 function update() {
   frameCount++;
@@ -321,7 +381,9 @@ function update() {
     updatePlayer();
     for (let i = enemies.length-1; i >= 0; i--) {
       const e = enemies[i];
-      if (e.type==='grub') updateGrub(e);
+      if (e.type==='grub')      updateGrub(e);
+      else if (e.type==='fly')  updateFly(e);
+      else if (e.type==='tank') updateTank(e);
     }
     updateTears();
     updateParticles();
@@ -834,18 +896,76 @@ function drawGrub(e) {
   ctx.restore();
 }
 
-// Fly and Tank draw functions come in Task 5. Stub them now:
 function drawFly(e) {
-  ctx.save(); ctx.translate(e.x, e.y);
-  ctx.fillStyle = e.hitFlash > 0 ? '#fff' : '#5a5a9a';
-  ctx.beginPath(); ctx.arc(0, 0, 10, 0, Math.PI * 2); ctx.fill();
+  const flutter = Math.sin(frameCount * 0.3) * 3;
+  const glow = e.phase === 'telegraph' ? Math.abs(Math.sin(frameCount * 0.2)) : 0;
+  ctx.save();
+  ctx.translate(e.x, e.y + flutter * 0.3);
+
+  if (glow > 0) { ctx.shadowColor='#ff4444'; ctx.shadowBlur=15*glow; }
+
+  // Wings
+  ctx.globalAlpha = e.hitFlash > 0 ? 1 : 0.5;
+  ctx.fillStyle = e.slowTimer > 0 ? 'rgba(136,200,255,0.5)' : 'rgba(150,180,255,0.5)';
+  ctx.beginPath(); ctx.ellipse(-14, -2+flutter, 14, 7, -0.3, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(14, -2+flutter, 14, 7, 0.3, 0, Math.PI*2); ctx.fill();
+  ctx.globalAlpha = 1;
+
+  // Body
+  ctx.fillStyle = e.hitFlash>0 ? '#fff' : (e.slowTimer>0 ? '#88aacc' : '#3a3a6a');
+  ctx.beginPath(); ctx.ellipse(0, 4, 8, 11, 0, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = e.hitFlash>0 ? '#fff' : (e.slowTimer>0 ? '#aaccee' : '#5a5a9a');
+  ctx.beginPath(); ctx.ellipse(0, -2, 10, 8, 0, 0, Math.PI*2); ctx.fill();
+
+  // Compound eyes
+  ctx.fillStyle = '#ff4444';
+  ctx.beginPath(); ctx.arc(-5, -4, 4, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(5, -4, 4, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = '#cc0000';
+  ctx.beginPath(); ctx.arc(-5, -4, 2.5, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(5, -4, 2.5, 0, Math.PI*2); ctx.fill();
+
   ctx.restore();
 }
 
 function drawTank(e) {
-  ctx.save(); ctx.translate(e.x, e.y);
-  ctx.fillStyle = e.hitFlash > 0 ? '#fff' : '#8a2a2a';
-  ctx.beginPath(); ctx.arc(0, 0, 22, 0, Math.PI * 2); ctx.fill();
+  const pulse = 1 + Math.sin(e.pulseTimer/60*Math.PI*2) * 0.04;
+  ctx.save();
+  ctx.translate(e.x, e.y);
+  ctx.scale(pulse, pulse);
+
+  const bodyColor = e.hitFlash>0 ? '#fff' : (e.slowTimer>0 ? '#88aacc' : '#6a1a1a');
+  const highColor  = e.hitFlash>0 ? '#fff' : (e.slowTimer>0 ? '#aaccee' : '#8a2a2a');
+
+  // Shell body
+  ctx.fillStyle = bodyColor;
+  ctx.beginPath(); ctx.ellipse(0, 4, 24, 19, 0, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = highColor;
+  ctx.beginPath(); ctx.ellipse(0, 3, 20, 16, 0, 0, Math.PI*2); ctx.fill();
+
+  // Shell dividing lines
+  ctx.strokeStyle = bodyColor; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.moveTo(0,-12); ctx.lineTo(0,22); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(-22,4); ctx.bezierCurveTo(-10,-3,10,-3,22,4); ctx.stroke();
+
+  // HP pips on back (go dark as hp reduces)
+  for (let i=0; i<3; i++) {
+    ctx.fillStyle = i < e.hp ? '#ff6060' : '#3a1010';
+    ctx.beginPath(); ctx.arc(-8+i*8, 6, 4, 0, Math.PI*2); ctx.fill();
+  }
+
+  // Head
+  ctx.fillStyle = e.hitFlash>0 ? '#fff' : '#7a2020';
+  ctx.beginPath(); ctx.arc(0,-14,10,0,Math.PI*2); ctx.fill();
+
+  // Eyes
+  ctx.fillStyle='#fff';
+  ctx.beginPath(); ctx.arc(-5,-16,3.5,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(5,-16,3.5,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle='#000';
+  ctx.beginPath(); ctx.arc(-4,-16,2,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(6,-16,2,0,Math.PI*2); ctx.fill();
+
   ctx.restore();
 }
 
