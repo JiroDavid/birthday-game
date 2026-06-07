@@ -28,7 +28,7 @@ A single-file HTML5 canvas birthday gift game for **NopeYep**. Classic Binding o
 // ─── DRAWING ─────── drawPlayer, drawEnemy, drawRoom, drawHUD,
 //                    drawMinimap, drawPopup, drawConfetti, drawBossHPBar
 // ─── ENEMIES ─────── spawnEnemy, updateGrub, updateFly, updateTank
-// ─── BOSS ────────── updateCakeGolem, drawCakeGolem
+// ─── BOSS ────────── updateMomaMama, drawMomaMama
 // ─── SKILLS ─────────applySkill, updateOrbitals, updateTears (skill effects)
 // ─── ROOMS ──────────room graph data, loadRoom, checkDoors, transition
 // ─── LOOP ───────────update() + render() via requestAnimationFrame
@@ -61,7 +61,7 @@ TITLE → PLAYING → TRANSITION (room slide, 0.3s)
 | Fight 1 | 3 grubs + 1 fly | Skill pickup on clear |
 | Fight 2 | 2 flies + 2 grubs | Skill pickup on clear |
 | Fight 3 | 1 tank + 2 grubs | Skill pickup on clear |
-| Boss | Cake Golem | Boss intro flash; skill pickup on death |
+| Boss | Momo-Mama | Boss intro flash; skill pickup on death |
 | Garden | none | Photos board, Videos board, Throne |
 
 ### Room structure
@@ -162,11 +162,12 @@ Triggered after each room clear (3 combat rooms + boss = 4 pickups total).
 
 ---
 
-## 6. Boss — The Cake Golem
+## 6. Boss — Momo-Mama (Giant Slime)
 
 **Room:** dedicated boss room between Fight 3 and Garden.  
-**Intro:** 2s flash screen with boss name in large retro font + ominous audio sting.  
-**Art:** placeholder = layered rect (tiered cake shape). Real sprite drops into `img/boss-cake.png`.
+**Intro:** 2s flash screen "MOMO-MAMA" in large retro font + ominous audio sting.  
+**Art:** Sprite sheets in `sprites/Momo-Mama/` (64×64 per frame, horizontal sprite sheets). Falls back to canvas-drawn blob placeholder if folder missing.  
+**Lore:** Momo-Mama is a giant slime who protects the smaller Momo slimes. Cute but aggressive when threatened.
 
 ### Stats
 
@@ -174,22 +175,22 @@ Triggered after each room clear (3 combat rooms + boss = 4 pickups total).
 |-|-------|
 | HP | 24 hits |
 | Phase 2 threshold | ≤12 HP |
-| Size | ~80×90px |
-| Speed | 0.9 px/frame |
+| Size | ~80×80px displayed (2.5× scale of 32px sprite) |
+| Speed | 0.9 px/frame crawl |
 
 ### Phase 1 (24–13 HP)
-- Slowly stomps toward player.
-- Every 3s: candles fire a radial burst of 8 evenly-spaced flame-blobs outward (telegraphed 1s early by candles glowing white).
-- Stomp causes 0.1s screen shake.
+- Slowly **crawls** toward player (crawl/idle animation).
+- Every 3s: **telegraphs a jump attack** — shadow appears on player position for 1s, then Momo-Mama leaps and **lands on the shadow** with AoE splash (impactParticles in purple/green, screen shake). Safe to dodge by moving off the shadow.
+- Jump is telegraphed 1s in advance with a darkening ground circle at the target.
 
 ### Phase 2 (≤12 HP)
-- Visual: loses top cake tier (damaged sprite / rect removed).
-- Radial burst now fires + 1 aimed blob directly at player simultaneously.
-- Spawns 2 tank-bugs ("frosting golems") on phase transition.
-- Stomp shake doubles.
+- Switches to **angry animation**, speed increases to 1.4 px/frame.
+- Spawns 2–3 small **Momo slime minions** (use existing grub enemy type, recolored purple) on phase transition.
+- Jump attack fires more frequently (every 2s) and adds an **aimed blob projectile** on landing that travels toward the player.
+- Hit flash glows red instead of white.
 
 ### Death
-- Large explosion particles in pink/white/yellow.
+- Large splat particles in purple/green/white.
 - 0.5s screen shake.
 - Boss HP bar flashes then fades.
 - Skill pedestal drops in center of room.
@@ -197,7 +198,14 @@ Triggered after each room clear (3 combat rooms + boss = 4 pickups total).
 
 ### Boss HUD
 - HP bar across bottom of screen (Isaac-style).
-- Bar label: "THE CAKE GOLEM".
+- Bar label: "MOMO-MAMA".
+
+### Sprite files (when available in sprites/Momo-Mama/)
+- Crawl/Idle animation for Phase 1 movement
+- Angry animation for Phase 2
+- Jump/jump attack animation for the leap
+- Hurt animation for hit flash
+- Fallback: canvas-drawn purple blob with eyes if sprites missing
 
 ---
 
@@ -284,7 +292,7 @@ const CONFIG = {
 - **Palette:** Warm garden greens + earthy browns + gold accents. Dark room border/vignette.
 - **Player:** `img/character.png` with white fringe cleaned (alpha-keyed). Fallback: simple circle+face shape. Flips horizontally by facing direction.
 - **Enemies:** Canvas-drawn placeholder shapes. Isolated `drawGrub()`, `drawFly()`, `drawTank()` functions — swap in real sprites by replacing function body.
-- **Boss:** Canvas-drawn layered rect placeholder. Swap via `drawCakeGolem()`.
+- **Boss:** Canvas-drawn purple blob placeholder. Swap via `drawMomaMama()` when sprites land in `sprites/Momo-Mama/`.
 - **Font:** Press Start 2P embedded as base64 `@font-face`. Used consistently for all UI text.
 - **Rooms:** Grass tile floor (2 variants, checkerboard), stone border walls, flower/pebble decorations, soft radial vignette overlay.
 - **Title screen:** Game title, "Happy Birthday, NopeYep!", controls list, Press E/Enter to start.
@@ -299,7 +307,7 @@ const CONFIG = {
 - [ ] 6-room progression with locked/unlocked doors
 - [ ] Skill pickup overlay after each room clear and boss kill
 - [ ] All 8 mechanical skills implemented and stackable
-- [ ] Cake Golem boss: 2 phases, HP bar, intro flash, death explosion
+- [ ] Momo-Mama boss: 2 phases, jump attack, HP bar, intro flash, death splat
 - [ ] Photos + Videos boards open, navigate, handle missing files gracefully
 - [ ] Throne → confetti + birthday banner; can dismiss and roam
 - [ ] Isaac-style minimap updates correctly
@@ -316,7 +324,7 @@ const CONFIG = {
 2. **Room system** — 6-room graph, doors lock/unlock, slide transitions, minimap
 3. **Enemies** — all 3 types + death juice + room enemy configs
 4. **Skill system** — pickup overlay UI + all 6 skills + stacking logic
-5. **Boss** — Cake Golem, 2 phases, HP bar, boss intro, death
+5. **Boss** — Momo-Mama, 2 phases, jump attack, HP bar, boss intro, death splat
 6. **Art polish** — garden rooms, vignette, player sprite cleanup, font pass, title screen
 7. **Birthday content** — photo board, video board, throne + confetti + banner
 8. **Audio** — all Web Audio sfx

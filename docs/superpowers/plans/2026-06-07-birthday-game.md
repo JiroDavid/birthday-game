@@ -1687,7 +1687,7 @@ git commit -m "feat: all 8 mechanical skills implemented and stackable"
 
 ---
 
-## Task 7: Cake Golem boss
+## Task 7: Momo-Mama boss (Giant Slime)
 
 **Files:**
 - Modify: `index.html` (BOSS section, LOOP)
@@ -1702,184 +1702,166 @@ function initBoss() {
     hp: 24, maxHP: 24,
     phase: 1,
     speed: 0.9,
-    fireTimer: 180,       // 3s initial delay before first burst
+    jumpTimer: 180,       // 3s before first jump
     telegraphTimer: 0,
     telegraphing: false,
-    stompTimer: 0,
+    shadowX: 0, shadowY: 0, // where jump will land
+    jumpInFlight: false,
+    jumpT: 0,             // 0→1 jump arc progress
+    startX: 0, startY: 0, // jump start position
     hitFlash: 0,
     slowTimer: 0,
     spawnedMinions: false,
     knockVx: 0, knockVy: 0,
-    // Projectiles fired by boss
-    projectiles: [],      // { x, y, vx, vy, life }
+    projectiles: [],
+    animFrame: 0,
+    animTimer: 0,
   };
 }
 ```
 
-- [ ] **Step 7.2 — Implement updateCakeGolem()**
+- [ ] **Step 7.2 — Implement updateMomaMama()**
 
 ```js
-function updateCakeGolem() {
+function updateMomaMama() {
   if (!boss) return;
   if (boss.hitFlash > 0) boss.hitFlash--;
   if (boss.slowTimer > 0) boss.slowTimer--;
 
-  const speed = boss.speed * (boss.slowTimer > 0 ? 0.4 : 1);
+  // Animate sprite frames
+  boss.animTimer++;
+  if (boss.animTimer >= 8) { boss.animTimer = 0; boss.animFrame++; }
+
+  if (boss.jumpInFlight) {
+    // Arc jump toward shadow position
+    boss.jumpT += 0.06;
+    boss.x = boss.startX + (boss.shadowX - boss.startX) * boss.jumpT;
+    boss.y = boss.startY + (boss.shadowY - boss.startY) * boss.jumpT
+             - Math.sin(boss.jumpT * Math.PI) * 80; // arc height
+    if (boss.jumpT >= 1) {
+      boss.jumpInFlight = false;
+      boss.x = boss.shadowX; boss.y = boss.shadowY;
+      startShake(boss.phase === 2 ? 12 : 8, boss.phase === 2 ? 20 : 14);
+      spawnParticles(boss.x, boss.y, '#aa44ee', 20, 8, 40);
+      spawnParticles(boss.x, boss.y, '#44ee88', 15, 6, 35);
+      if (boss.phase === 2) {
+        // Phase 2: aimed blob on landing
+        const dx = player.x - boss.x, dy = player.y - boss.y;
+        const len = Math.hypot(dx, dy) || 1;
+        boss.projectiles.push({ x: boss.x, y: boss.y,
+          vx: (dx/len)*3.5, vy: (dy/len)*3.5, life: 150, color: '#aa44ee' });
+      }
+    }
+    return; // no other movement during jump
+  }
+
+  // Crawl toward player
+  const speed = boss.speed * (boss.slowTimer > 0 ? 0.4 : 1) * (boss.phase === 2 ? 1.55 : 1);
   const dx = player.x - boss.x, dy = player.y - boss.y;
   const len = Math.hypot(dx, dy) || 1;
-
   boss.knockVx *= 0.85; boss.knockVy *= 0.85;
-  boss.x += (dx / len) * speed + boss.knockVx;
-  boss.y += (dy / len) * speed + boss.knockVy;
-  clampToRoom(boss, 45);
-
-  // Stomp shake (periodic)
-  boss.stompTimer++;
-  if (boss.stompTimer >= 60) {
-    boss.stompTimer = 0;
-    const shakeMag = boss.phase === 2 ? 6 : 3;
-    startShake(shakeMag, 8);
-  }
+  boss.x += (dx/len)*speed + boss.knockVx;
+  boss.y += (dy/len)*speed + boss.knockVy;
+  clampToRoom(boss, 40);
 
   // Phase transition
   if (boss.phase === 1 && boss.hp <= 12) {
     boss.phase = 2;
+    boss.animFrame = 0;
     startShake(12, 20);
     if (!boss.spawnedMinions) {
       boss.spawnedMinions = true;
-      spawnEnemy('tank', boss.x - 120, boss.y + 80);
-      spawnEnemy('tank', boss.x + 120, boss.y + 80);
+      spawnEnemy('grub', boss.x - 120, boss.y + 80);
+      spawnEnemy('grub', boss.x + 120, boss.y + 80);
+      spawnEnemy('grub', boss.x, boss.y + 120);
     }
   }
 
-  // Telegraph → fire candle burst
-  boss.fireTimer--;
-  if (!boss.telegraphing && boss.fireTimer <= 60) {
+  // Jump telegraph → jump
+  boss.jumpTimer--;
+  if (!boss.telegraphing && boss.jumpTimer <= 60) {
     boss.telegraphing = true;
     boss.telegraphTimer = 60;
+    boss.shadowX = player.x; boss.shadowY = player.y;
   }
   if (boss.telegraphing) {
     boss.telegraphTimer--;
     if (boss.telegraphTimer <= 0) {
       boss.telegraphing = false;
-      fireCandles();
-      boss.fireTimer = boss.phase === 2 ? 150 : 180;
+      boss.jumpInFlight = true;
+      boss.jumpT = 0;
+      boss.startX = boss.x; boss.startY = boss.y;
+      boss.jumpTimer = boss.phase === 2 ? 120 : 180;
+      boss.animFrame = 0;
     }
   }
 
-  // Update boss projectiles
+  // Update projectiles
   for (let i = boss.projectiles.length - 1; i >= 0; i--) {
     const p = boss.projectiles[i];
-    p.x += p.vx; p.y += p.vy;
-    p.life--;
+    p.x += p.vx; p.y += p.vy; p.life--;
     if (p.life <= 0 || p.x < 0 || p.x > W || p.y < PF_TOP || p.y > H) {
-      boss.projectiles.splice(i, 1);
-      continue;
+      boss.projectiles.splice(i, 1); continue;
     }
-    // Player collision
     if (player.iframes <= 0 && Math.hypot(p.x - player.x, p.y - player.y) < 12 + 16) {
-      player.hp--;
-      player.iframes = CONFIG.player.iframeDuration;
-      startShake(4, 8);
-      boss.projectiles.splice(i, 1);
+      player.hp--; player.iframes = CONFIG.player.iframeDuration;
+      startShake(4, 8); boss.projectiles.splice(i, 1);
       if (player.hp <= 0) gameState = 'TITLE';
     }
   }
 }
-
-function fireCandles() {
-  const count = 8;
-  for (let i = 0; i < count; i++) {
-    const angle = (i / count) * Math.PI * 2;
-    boss.projectiles.push({
-      x: boss.x, y: boss.y,
-      vx: Math.cos(angle) * 3,
-      vy: Math.sin(angle) * 3,
-      life: 120, color: '#ff8844',
-    });
-  }
-  // Phase 2: also fire aimed blob at player
-  if (boss.phase === 2) {
-    const dx = player.x - boss.x, dy = player.y - boss.y;
-    const len = Math.hypot(dx, dy) || 1;
-    boss.projectiles.push({
-      x: boss.x, y: boss.y,
-      vx: (dx / len) * 4,
-      vy: (dy / len) * 4,
-      life: 150, color: '#ff4444',
-    });
-  }
-}
 ```
 
-- [ ] **Step 7.3 — Implement drawCakeGolem()**
+- [ ] **Step 7.3 — Implement drawMomaMama()**
 
 ```js
-function drawCakeGolem() {
+function drawMomaMama() {
   if (!boss) return;
+
+  // Shadow on ground during telegraph
+  if (boss.telegraphing) {
+    const pulse = 0.5 + 0.5 * Math.abs(Math.sin(frameCount * 0.15));
+    ctx.save();
+    ctx.globalAlpha = 0.5 * pulse;
+    ctx.fillStyle = '#220022';
+    ctx.beginPath();
+    ctx.ellipse(boss.shadowX, boss.shadowY, 40, 20, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  // Blob placeholder (replaced when sprites land)
   ctx.save();
   ctx.translate(boss.x, boss.y);
-
-  // Telegraph glow
-  if (boss.telegraphing) {
-    const g = Math.abs(Math.sin(frameCount * 0.15));
-    ctx.shadowColor = '#ffffff';
-    ctx.shadowBlur = 20 * g;
-  }
-
-  const bodyColor = boss.hitFlash > 0 ? '#ffffff' : '#d4a8c0';
-  const tier2Color = boss.hitFlash > 0 ? '#ffffff' : '#e8c8d8';
-  const tier3Color = boss.hitFlash > 0 ? '#ffffff' : '#f8e8f0';
-  const frostColor = boss.hitFlash > 0 ? '#ffffff' : '#ffffff';
-
-  // Bottom tier
-  ctx.fillStyle = bodyColor;
-  ctx.fillRect(-38, -10, 76, 40);
-  ctx.fillStyle = frostColor;
-  ctx.fillRect(-38, -14, 76, 8);
-
-  // Middle tier
-  ctx.fillStyle = tier2Color;
-  ctx.fillRect(-28, -38, 56, 30);
-  ctx.fillStyle = frostColor;
-  ctx.fillRect(-28, -42, 56, 8);
-
-  // Top tier (removed in phase 2)
-  if (boss.phase === 1) {
-    ctx.fillStyle = tier3Color;
-    ctx.fillRect(-18, -58, 36, 22);
-    ctx.fillStyle = frostColor;
-    ctx.fillRect(-18, -62, 36, 7);
-    // Candles (telegraph: glow white)
-    const candleColor = boss.telegraphing ? '#ffffff' : '#e8c547';
-    ctx.fillStyle = candleColor;
-    [-10, 0, 10].forEach(cx => {
-      ctx.fillRect(boss.x === boss.x ? cx - 2 : cx - 2, -70, 4, 12);
-    });
+  if (boss.hitFlash > 0) {
+    ctx.fillStyle = boss.phase === 2 ? '#ff4444' : '#ffffff';
+  } else if (boss.slowTimer > 0) {
+    ctx.fillStyle = '#88aaee';
   } else {
-    // Phase 2: cracked top, exposed candles glow red
-    ctx.fillStyle = boss.telegraphing ? '#ff8888' : '#cc4444';
-    [-10, 0, 10].forEach(cx => {
-      ctx.fillRect(cx - 2, -50, 4, 12);
-    });
+    ctx.fillStyle = boss.phase === 2 ? '#882299' : '#aa44ee';
   }
-
-  // Eyes on middle tier
-  ctx.fillStyle = boss.hitFlash > 0 ? '#fff' : '#880000';
-  ctx.beginPath(); ctx.arc(-12, -22, 7, 0, Math.PI * 2); ctx.fill();
-  ctx.beginPath(); ctx.arc(12, -22, 7, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = '#ffaaaa';
-  ctx.beginPath(); ctx.arc(-10, -23, 3, 0, Math.PI * 2); ctx.fill();
-  ctx.beginPath(); ctx.arc(14, -23, 3, 0, Math.PI * 2); ctx.fill();
-
+  const wobble = Math.sin(frameCount * 0.1) * 4;
+  ctx.beginPath();
+  ctx.ellipse(0, wobble/2, 38 + wobble, 35 - wobble/2, 0, 0, Math.PI * 2);
+  ctx.fill();
+  // Shiny highlight
+  ctx.fillStyle = 'rgba(255,255,255,0.3)';
+  ctx.beginPath(); ctx.ellipse(-10, -12, 12, 8, -0.4, 0, Math.PI * 2); ctx.fill();
+  // Eyes
+  ctx.fillStyle = '#fff';
+  ctx.beginPath(); ctx.arc(-13, -5, 9, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(13, -5, 9, 0, Math.PI * 2); ctx.fill();
+  const eyeColor = boss.phase === 2 ? '#ff0000' : '#222';
+  ctx.fillStyle = eyeColor;
+  ctx.beginPath(); ctx.arc(-11, -5, 5, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(15, -5, 5, 0, Math.PI * 2); ctx.fill();
   ctx.restore();
 
   // Draw projectiles
   boss.projectiles.forEach(p => {
     ctx.save();
-    ctx.fillStyle = p.color || '#ff8844';
-    ctx.shadowColor = p.color || '#ff8844';
-    ctx.shadowBlur = 6;
+    ctx.fillStyle = p.color || '#aa44ee';
+    ctx.shadowColor = p.color; ctx.shadowBlur = 6;
     ctx.beginPath(); ctx.arc(p.x, p.y, 7, 0, Math.PI * 2); ctx.fill();
     ctx.restore();
   });
@@ -1899,7 +1881,7 @@ function drawBossHPBar() {
   ctx.fillStyle = '#e8c547';
   ctx.font = px(5);
   ctx.textAlign = 'center';
-  ctx.fillText('THE CAKE GOLEM', W / 2, by - 6);
+  ctx.fillText('MOMO-MAMA', W / 2, by - 6);
   ctx.textAlign = 'left';
 }
 ```
@@ -1942,9 +1924,9 @@ In `checkTearEnemyCollisions()`, after the enemy loop, add:
 Implement `killBoss()`:
 ```js
 function killBoss() {
-  spawnParticles(boss.x, boss.y, '#ffaacc', 40, 8, 60);
-  spawnParticles(boss.x, boss.y, '#ffffff', 20, 6, 50);
-  spawnParticles(boss.x, boss.y, '#e8c547', 15, 5, 45);
+  spawnParticles(boss.x, boss.y, '#aa44ee', 40, 8, 60);
+  spawnParticles(boss.x, boss.y, '#44ee88', 20, 6, 50);
+  spawnParticles(boss.x, boss.y, '#ffffff', 15, 5, 45);
   startShake(15, 30);
   boss = null;
   checkRoomClear();
@@ -1967,10 +1949,10 @@ function drawBossIntro() {
   ctx.fillStyle = '#cc3333';
   ctx.font = px(9);
   ctx.textAlign = 'center';
-  ctx.fillText('THE CAKE GOLEM', W / 2, H / 2 - 20);
+  ctx.fillText('MOMO-MAMA', W / 2, H / 2 - 20);
   ctx.fillStyle = '#888';
   ctx.font = px(6);
-  ctx.fillText('approaches...', W / 2, H / 2 + 20);
+  ctx.fillText('She\'s here to protect her slimes...', W / 2, H / 2 + 20);
   ctx.globalAlpha = 1;
   ctx.textAlign = 'left';
 }
@@ -1988,29 +1970,29 @@ Wire into update() and render():
 Wire boss into PLAYING update and render:
 ```js
 // update() PLAYING block:
-    if (boss) updateCakeGolem();
+    if (boss) updateMomaMama();
 
 // render() PLAYING block, after enemies:
-    if (boss) drawCakeGolem();
+    if (boss) drawMomaMama();
     if (boss) drawBossHPBar();
 ```
 
 - [ ] **Step 7.6 — Verify in browser**
 
 Navigate through 3 fight rooms and into boss room. Verify:
-- Boss intro flash shows "THE CAKE GOLEM" then fades to gameplay
-- Cake Golem stomps toward player
-- Candles telegraph (white glow) then fire radial burst
-- HP bar shows across bottom
-- Phase 2 triggers at ≤12 HP: top tier disappears, 2 tank minions spawn, aimed shots added
-- Killing boss spawns particles, triggers skill pickup
+- Boss intro flash shows "MOMO-MAMA" then fades to gameplay
+- Momo-Mama crawls toward player with wobble animation
+- Jump telegraph shadow appears on player position, then boss leaps and lands with AoE splash
+- HP bar shows "MOMO-MAMA" across bottom
+- Phase 2 triggers at ≤12 HP: speed increases, 3 grub minions spawn, aimed blob added on jump landing
+- Killing boss spawns purple/green particles, triggers skill pickup
 - No console errors
 
 - [ ] **Step 7.7 — Commit**
 
 ```bash
 git add index.html
-git commit -m "feat: Cake Golem boss, 2 phases, HP bar, intro flash, boss death"
+git commit -m "feat: Momo-Mama boss (giant slime), 2 phases, HP bar, jump attack, boss death"
 ```
 
 ---
@@ -2035,7 +2017,24 @@ function loadImage(src, onLoad) {
 loadImage('img/character.png', img => { player.sprite = img; });
 ```
 
-The `drawPlayer()` function already checks `player.sprite` and falls back to the placeholder circle, so no other changes needed.
+Player sprite sheets are in `sprites/3 Dude_Monster/`. Each frame is **32×32 pixels** in a horizontal sheet:
+- `Dude_Monster_Idle_4.png` — 4 frames, used for idle
+- `Dude_Monster_Walk_6.png` — 6 frames, used for movement
+- `Dude_Monster_Hurt_4.png` — 4 frames, used during i-frames
+
+Load via:
+```js
+loadImage('sprites/3 Dude_Monster/Dude_Monster_Idle_4.png', img => { player.spriteIdle = img; });
+loadImage('sprites/3 Dude_Monster/Dude_Monster_Walk_6.png', img => { player.spriteWalk = img; });
+loadImage('sprites/3 Dude_Monster/Dude_Monster_Hurt_4.png', img => { player.spriteHurt = img; });
+```
+
+Draw with 2× scale (32px source → 64px displayed):
+```js
+ctx.drawImage(sheet, frame * 32, 0, 32, 32, -32, -32, 64, 64)
+```
+
+The `drawPlayer()` function already checks `player.sprite` and falls back to the placeholder circle. When upgrading to sprite sheets, select the appropriate sheet based on movement state and i-frame status, then index into it by `animFrame % frameCount`.
 
 - [ ] **Step 8.2 — Add flower and pebble decorations to drawRoom()**
 
@@ -2669,7 +2668,7 @@ To deliver to NopeYep:
 
 ## Self-Review Notes
 
-- All function names used across tasks are consistent: `drawGrub`, `drawFly`, `drawTank`, `drawCakeGolem`, `updateGrub`, `updateFly`, `updateTank`, `updateCakeGolem`, `killEnemy`, `killBoss`, `spawnEnemy`, `checkRoomClear`, `checkTearEnemyCollisions`, `resolveCircleVsObstacles`, `clampToRoom`, `enemyRadius`, `openPopup`, `closePopup`, `navigatePopup`, `tryInteract`, `startCelebration`, `roundRect`, `wrapText`, `px`, `startShake`, `spawnParticles`, `impactParticles`, `loadRoom`, `startTransition`, `checkDoorTrigger`, `fireTear`, `updateTears`, `updateParticles`, `updateOrbitals`, `applySkill`, `fireCandles`, `initBoss`
+- All function names used across tasks are consistent: `drawGrub`, `drawFly`, `drawTank`, `drawMomaMama`, `updateGrub`, `updateFly`, `updateTank`, `updateMomaMama`, `killEnemy`, `killBoss`, `spawnEnemy`, `checkRoomClear`, `checkTearEnemyCollisions`, `resolveCircleVsObstacles`, `clampToRoom`, `enemyRadius`, `openPopup`, `closePopup`, `navigatePopup`, `tryInteract`, `startCelebration`, `roundRect`, `wrapText`, `px`, `startShake`, `spawnParticles`, `impactParticles`, `loadRoom`, `startTransition`, `checkDoorTrigger`, `fireTear`, `updateTears`, `updateParticles`, `updateOrbitals`, `applySkill`, `initBoss`
 - `enemyRadius()` must be defined before `checkTearEnemyCollisions()` and `checkPlayerEnemyCollisions()`
 - `keysJustPressed` must be cleared at start of `update()` before any state reads it
 - `px()` and `px2()` are duplicates — consolidate to just `px()` throughout
