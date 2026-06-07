@@ -133,7 +133,7 @@ Juice: tiny muzzle flash on fire, particle splash on impact, brief screen nudge 
   - Use row 0 (idle/moving, 4 frames) for normal movement
 
 #### 🐛 Grub (sprite needed)
-- **Note:** Grub sprite still needed — hopping ground creature (slime, caterpillar, worm, or small blob). Should be approximately 32–64px. The Grub is the third enemy type — a slow hopping creature that chases the player.
+- **Note:** Grub sprite: use `sprites/Momo-Mama/Momo-Mama/variants/green/mm-crawl.png` (5 frames, 64x64px per frame, 3 rows — use row 0). Display at 48x48px (0.75x scale). This makes mini-Bloom variants the small enemies, tying the visual theme together.
 
 ### Hit feedback (all enemies)
 - Red flash on hit (3 frames)
