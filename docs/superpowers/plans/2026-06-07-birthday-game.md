@@ -1695,6 +1695,43 @@ git commit -m "feat: all 8 mechanical skills implemented and stackable"
 **Files:**
 - Modify: `index.html` (BOSS section, LOOP)
 
+- [ ] **Step 7.0 — Add Bloom sprite loading to ASSETS section**
+
+Add to the ASSETS section (after player sprite load):
+
+```js
+const bloomSprites = {};
+const bloomPaths = {
+  crawl:  'sprites/Momo-Mama/Momo-Mama/momo mama/mm-crawl.png',
+  attack: 'sprites/Momo-Mama/Momo-Mama/momo mama/mm-generic attack.png',
+  jump:   'sprites/Momo-Mama/Momo-Mama/momo mama/mm-jump.png',
+  hurt:   'sprites/Momo-Mama/Momo-Mama/momo mama/mm-hurt.png',
+  happy:  'sprites/Momo-Mama/Momo-Mama/EXTRAS/mm-happy.png',
+  heart:  'sprites/Momo-Mama/FX_Heart.png',
+};
+Object.entries(bloomPaths).forEach(([key, src]) => loadImage(src, img => { bloomSprites[key] = img; }));
+
+// Frame counts per animation
+const BLOOM_FRAMES = { crawl: 5, attack: 7, jump: 6, hurt: 6, happy: 5 };
+const BLOOM_FRAME_SIZE = 64;
+const BLOOM_DISPLAY_SIZE = 128; // 2× scale
+```
+
+Also add Dude Monster sprite loading:
+
+```js
+const dudeSprites = {};
+const dudePaths = {
+  idle: 'sprites/3 Dude_Monster/Dude_Monster_Idle_4.png',
+  walk: 'sprites/3 Dude_Monster/Dude_Monster_Walk_6.png',
+  hurt: 'sprites/3 Dude_Monster/Dude_Monster_Hurt_4.png',
+};
+const DUDE_FRAMES = { idle: 4, walk: 6, hurt: 4 };
+const DUDE_FRAME_SIZE = 32;
+const DUDE_DISPLAY_SIZE = 64; // 2× scale
+Object.entries(dudePaths).forEach(([key, src]) => loadImage(src, img => { dudeSprites[key] = img; }));
+```
+
 - [ ] **Step 7.1 — Add BOSS section: initBoss() and boss state**
 
 ```js
@@ -1821,52 +1858,51 @@ function updateBloom() {
 function drawBloom() {
   if (!boss) return;
 
-  // Shadow on ground during telegraph
+  // Telegraph shadow on ground
   if (boss.telegraphing) {
     const pulse = 0.5 + 0.5 * Math.abs(Math.sin(frameCount * 0.15));
     ctx.save();
     ctx.globalAlpha = 0.5 * pulse;
     ctx.fillStyle = '#220022';
-    ctx.beginPath();
-    ctx.ellipse(boss.shadowX, boss.shadowY, 40, 20, 0, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.beginPath(); ctx.ellipse(boss.shadowX, boss.shadowY, 40, 20, 0, 0, Math.PI * 2); ctx.fill();
     ctx.restore();
   }
 
-  // Blob placeholder (replaced when sprites land)
   ctx.save();
   ctx.translate(boss.x, boss.y);
-  if (boss.hitFlash > 0) {
-    ctx.fillStyle = boss.phase === 2 ? '#ff4444' : '#ffffff';
-  } else if (boss.slowTimer > 0) {
-    ctx.fillStyle = '#88aaee';
+
+  // Pick animation based on state
+  let sheet = null, frames = 1;
+  if (boss.hitFlash > 0 && bloomSprites.hurt) { sheet = bloomSprites.hurt; frames = BLOOM_FRAMES.hurt; }
+  else if (boss.jumpInFlight && bloomSprites.jump) { sheet = bloomSprites.jump; frames = BLOOM_FRAMES.jump; }
+  else if (boss.phase === 2 && bloomSprites.attack) { sheet = bloomSprites.attack; frames = BLOOM_FRAMES.attack; }
+  else if (bloomSprites.crawl) { sheet = bloomSprites.crawl; frames = BLOOM_FRAMES.crawl; }
+
+  const frame = Math.floor(boss.animFrame % frames);
+  const half = BLOOM_DISPLAY_SIZE / 2;
+
+  if (sheet && sheet.naturalWidth > 0) {
+    ctx.drawImage(sheet, frame * BLOOM_FRAME_SIZE, 0, BLOOM_FRAME_SIZE, BLOOM_FRAME_SIZE,
+                  -half, -half, BLOOM_DISPLAY_SIZE, BLOOM_DISPLAY_SIZE);
   } else {
+    // Canvas fallback blob
+    const wobble = Math.sin(frameCount * 0.1) * 4;
     ctx.fillStyle = boss.phase === 2 ? '#882299' : '#aa44ee';
+    ctx.beginPath(); ctx.ellipse(0, wobble/2, 38+wobble, 35-wobble/2, 0, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.beginPath(); ctx.arc(-13,-5,9,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(13,-5,9,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle = boss.phase===2 ? '#ff0000':'#222';
+    ctx.beginPath(); ctx.arc(-11,-5,5,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(15,-5,5,0,Math.PI*2); ctx.fill();
   }
-  const wobble = Math.sin(frameCount * 0.1) * 4;
-  ctx.beginPath();
-  ctx.ellipse(0, wobble/2, 38 + wobble, 35 - wobble/2, 0, 0, Math.PI * 2);
-  ctx.fill();
-  // Shiny highlight
-  ctx.fillStyle = 'rgba(255,255,255,0.3)';
-  ctx.beginPath(); ctx.ellipse(-10, -12, 12, 8, -0.4, 0, Math.PI * 2); ctx.fill();
-  // Eyes
-  ctx.fillStyle = '#fff';
-  ctx.beginPath(); ctx.arc(-13, -5, 9, 0, Math.PI * 2); ctx.fill();
-  ctx.beginPath(); ctx.arc(13, -5, 9, 0, Math.PI * 2); ctx.fill();
-  const eyeColor = boss.phase === 2 ? '#ff0000' : '#222';
-  ctx.fillStyle = eyeColor;
-  ctx.beginPath(); ctx.arc(-11, -5, 5, 0, Math.PI * 2); ctx.fill();
-  ctx.beginPath(); ctx.arc(15, -5, 5, 0, Math.PI * 2); ctx.fill();
   ctx.restore();
 
-  // Draw projectiles
+  // Projectiles
   boss.projectiles.forEach(p => {
-    ctx.save();
-    ctx.fillStyle = p.color || '#aa44ee';
+    ctx.save(); ctx.fillStyle = p.color||'#aa44ee';
     ctx.shadowColor = p.color; ctx.shadowBlur = 6;
-    ctx.beginPath(); ctx.arc(p.x, p.y, 7, 0, Math.PI * 2); ctx.fill();
-    ctx.restore();
+    ctx.beginPath(); ctx.arc(p.x,p.y,7,0,Math.PI*2); ctx.fill(); ctx.restore();
   });
 }
 
@@ -1963,23 +1999,27 @@ function drawPet() {
   const bounce = Math.sin(pet.bounceTimer * 0.08) * 3;
   ctx.save();
   ctx.translate(pet.x, pet.y + bounce);
-  ctx.fillStyle = '#cc66ff';
-  ctx.beginPath(); ctx.ellipse(0, 0, 16, 13, 0, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = 'rgba(255,255,255,0.3)';
-  ctx.beginPath(); ctx.ellipse(-5, -5, 5, 3, -0.4, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = '#fff';
-  ctx.beginPath(); ctx.arc(-6, -2, 4, 0, Math.PI * 2); ctx.fill();
-  ctx.beginPath(); ctx.arc(6, -2, 4, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = '#220033';
-  ctx.beginPath(); ctx.arc(-5, -2, 2.5, 0, Math.PI * 2); ctx.fill();
-  ctx.beginPath(); ctx.arc(7, -2, 2.5, 0, Math.PI * 2); ctx.fill();
-  if (!pet.befriended) {
-    // Show [E] prompt when player nearby
-    if (Math.hypot(player.x - pet.x, player.y - pet.y) < 48) {
-      ctx.fillStyle = '#fff'; ctx.font = '9px "Press Start 2P", monospace';
-      ctx.textAlign = 'center'; ctx.fillText('[E] befriend', 0, -26);
-      ctx.textAlign = 'left';
-    }
+
+  const sheet = bloomSprites.happy;
+  const frame = Math.floor(pet.bounceTimer / 10) % BLOOM_FRAMES.happy;
+  const petSize = 48; // 0.75× display size
+
+  if (sheet && sheet.naturalWidth > 0) {
+    ctx.drawImage(sheet, frame * BLOOM_FRAME_SIZE, 0, BLOOM_FRAME_SIZE, BLOOM_FRAME_SIZE,
+                  -petSize/2, -petSize/2, petSize, petSize);
+  } else {
+    // Fallback tiny blob
+    ctx.fillStyle = '#cc66ff';
+    ctx.beginPath(); ctx.ellipse(0,0,16,13,0,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(-6,-2,4,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(6,-2,4,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='#220033'; ctx.beginPath(); ctx.arc(-5,-2,2.5,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(7,-2,2.5,0,Math.PI*2); ctx.fill();
+  }
+
+  if (!pet.befriended && Math.hypot(player.x-pet.x, player.y-pet.y) < 48) {
+    ctx.fillStyle='#fff'; ctx.font='9px "Press Start 2P",monospace';
+    ctx.textAlign='center'; ctx.fillText('[E] befriend',0,-32); ctx.textAlign='left';
   }
   ctx.restore();
 }

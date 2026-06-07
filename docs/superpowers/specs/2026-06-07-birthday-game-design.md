@@ -209,12 +209,20 @@ Once befriended, she becomes a **pet companion** that follows the player through
 - HP bar across bottom of screen (Isaac-style).
 - Bar label: "BLOOM".
 
-### Sprite files (when available in sprites/Bloom/)
-- Crawl/Idle animation for Phase 1 movement
-- Angry animation for Phase 2
-- Jump/jump attack animation for the leap
-- Hurt animation for hit flash
-- Fallback: canvas-drawn purple blob with eyes if sprites missing
+### Sprite files
+
+All sheets use 64×64px frames. Render at 2× scale (128×128px display). Use row 0 (y=0) for front-facing.
+
+| Animation | File | Frames | Use |
+|-----------|------|--------|-----|
+| Crawl/idle | `sprites/Momo-Mama/Momo-Mama/momo mama/mm-crawl.png` | 5 | Phase 1 movement |
+| Angry | `sprites/Momo-Mama/Momo-Mama/momo mama/mm-generic attack.png` | 7 | Phase 2 |
+| Jump | `sprites/Momo-Mama/Momo-Mama/momo mama/mm-jump.png` | 6 | Jump attack |
+| Hurt | `sprites/Momo-Mama/Momo-Mama/momo mama/mm-hurt.png` | 6 | Hit flash |
+| Happy/pet | `sprites/Momo-Mama/Momo-Mama/EXTRAS/mm-happy.png` | 5 | Pet companion |
+| Heart FX | `sprites/Momo-Mama/FX_Heart.png` | 4 (32×32) | Befriend moment |
+
+Draw call: `ctx.drawImage(sheet, frame*64, row*64, 64, 64, x-64, y-64, 128, 128)`
 
 ---
 
