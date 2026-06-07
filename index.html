@@ -276,10 +276,10 @@ function updatePlayer() {
 
   if (dx !== 0 && dy !== 0) { dx *= 0.707; dy *= 0.707; }
 
-  // Apply knockback velocity (set by enemy collision in Task 3)
+  // Apply knockback velocity (decays each frame); clampToRoom handles boundary
   player.vx *= 0.8; player.vy *= 0.8;
-  player.x = Math.max(TILE, Math.min(W - TILE, player.x + dx * CONFIG.player.speed + player.vx));
-  player.y = Math.max(PF_TOP + TILE, Math.min(H - TILE, player.y + dy * CONFIG.player.speed + player.vy));
+  player.x += dx * CONFIG.player.speed + player.vx;
+  player.y += dy * CONFIG.player.speed + player.vy;
 
   if (dx > 0) player.facing = 1;
   if (dx < 0) player.facing = -1;
