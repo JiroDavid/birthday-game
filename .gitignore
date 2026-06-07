@@ -9,6 +9,9 @@ Thumbs.db
 # Unity (abandoned)
 unity/
 
+# Visual brainstorming companion (generated, not source)
+.superpowers/
+
 # Large video files — store locally, don't commit
 # Remove these lines if you want videos tracked in git
 # vid/*.mp4
