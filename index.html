@@ -128,8 +128,10 @@ function updatePlayer() {
 
   if (dx !== 0 && dy !== 0) { dx *= 0.707; dy *= 0.707; }
 
-  player.x = Math.max(TILE, Math.min(W - TILE, player.x + dx * CONFIG.player.speed));
-  player.y = Math.max(PF_TOP + TILE, Math.min(H - TILE, player.y + dy * CONFIG.player.speed));
+  // Apply knockback velocity (set by enemy collision in Task 3)
+  player.vx *= 0.8; player.vy *= 0.8;
+  player.x = Math.max(TILE, Math.min(W - TILE, player.x + dx * CONFIG.player.speed + player.vx));
+  player.y = Math.max(PF_TOP + TILE, Math.min(H - TILE, player.y + dy * CONFIG.player.speed + player.vy));
 
   if (dx > 0) player.facing = 1;
   if (dx < 0) player.facing = -1;
@@ -157,6 +159,7 @@ function fireTear(sx, sy) {
     vx: (sx / len) * speed,
     vy: (sy / len) * speed,
     life: CONFIG.player.tearLifespan,
+    lifespan: CONFIG.player.tearLifespan,
     radius: CONFIG.player.tearRadius,
     hitEnemies: new Set(),
     returning: false,
@@ -191,7 +194,7 @@ function updateTears() {
       });
       if (boss) {
         const d = Math.hypot(boss.x - t.x, boss.y - t.y);
-        if (d < nearestDist) nearest = boss;
+        if (d < nearestDist) { nearestDist = d; nearest = boss; }
       }
       if (nearest) {
         const dx = nearest.x - t.x, dy = nearest.y - t.y;
@@ -206,7 +209,7 @@ function updateTears() {
     }
 
     // Boomerang: reverse at half lifespan
-    if (player.skills.boomerang && !t.returning && t.life <= CONFIG.player.tearLifespan / 2) {
+    if (player.skills.boomerang && !t.returning && t.life <= t.lifespan / 2) {
       t.returning = true;
       t.vx = -t.vx; t.vy = -t.vy;
       t.hitEnemies.clear();
@@ -361,7 +364,7 @@ function drawPlayer() {
 
 function drawTears() {
   tears.forEach(t => {
-    const alpha = Math.max(0, t.life / CONFIG.player.tearLifespan);
+    const alpha = Math.max(0, t.life / t.lifespan);
     const r = t.radius * alpha;
     ctx.save();
     ctx.globalAlpha = alpha;
@@ -384,6 +387,7 @@ function drawParticles() {
 }
 
 function drawHUD() {
+  ctx.save();
   ctx.fillStyle = '#0d1a0d';
   ctx.fillRect(0, 0, W, HUD_H);
 
@@ -408,7 +412,7 @@ function drawHUD() {
   ctx.font = px(6);
   ctx.textAlign = 'center';
   ctx.fillText(currentRoom ? currentRoom.name : '', W / 2, 13);
-  ctx.textAlign = 'left';
+  ctx.restore();
 }
 
 function roundRect(ctx, x, y, w, h, r) {
