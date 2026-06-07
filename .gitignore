@@ -1,27 +1,5 @@
-# OS
-.DS_Store
-Thumbs.db
-*:Zone.Identifier
-
-# Editor
-.vscode/
-*.swp
-
-# Unity (abandoned)
-unity/
-
-# Sprite source/binary files (keep PNGs, skip everything else)
-sprites/**/*.aseprite
-sprites/**/*.ase
-sprites/**/*.psd
-sprites/**/*.pdf
-sprites/PSD/
-sprites/COUPON.*
-sprites/Font/
-
-# Visual brainstorming companion (generated, not source)
+.claude/
+vid/*.MOV
+sprites/pixel-art.zip
 .superpowers/
-
-# Large video files — store locally, don't commit
-# Remove these lines if you want videos tracked in git
-# vid/*.mp4
+*:Zone.Identifier
