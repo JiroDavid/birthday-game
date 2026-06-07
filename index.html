@@ -2057,33 +2057,29 @@ function drawTitle() {
   ctx.font = px(9);
   ctx.fillText('Controls', W/2, 296);
 
-  // Vertical divider
+  // Vertical divider — centred between the two halves
   ctx.strokeStyle = 'rgba(255,179,198,0.2)';
   ctx.lineWidth = 1;
-  ctx.beginPath(); ctx.moveTo(W/2, 308); ctx.lineTo(W/2, 370); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(W/2, 308); ctx.lineTo(W/2, 372); ctx.stroke();
 
-  // Left column: WASD + E
-  const lx = W/2 - 120;
+  // Left half: each row is "KEY   Action" left-aligned as a unit, centred in its half
+  // Half-width = 240. Key column at W/2-220, action column at W/2-150
   ctx.font = px(8);
-  ctx.textAlign = 'right';
-  ctx.fillStyle = '#C7F0BD';
-  ctx.fillText('WASD', lx - 6, 328);
-  ctx.fillText('E', lx - 6, 356);
   ctx.textAlign = 'left';
+  ctx.fillStyle = '#C7F0BD';
+  ctx.fillText('WASD', W/2 - 210, 328);
+  ctx.fillText('E', W/2 - 210, 356);
   ctx.fillStyle = '#FFF5E4';
-  ctx.fillText('Move', lx, 328);
-  ctx.fillText('Interact', lx, 356);
+  ctx.fillText('Move', W/2 - 140, 328);
+  ctx.fillText('Interact', W/2 - 140, 356);
 
-  // Right column: Arrows + Esc
-  const rx = W/2 + 16;
-  ctx.textAlign = 'right';
+  // Right half: mirrored — KEY at W/2+30, action at W/2+100
   ctx.fillStyle = '#C7F0BD';
-  ctx.fillText('Arrows', rx - 6, 328);
-  ctx.fillText('Esc', rx - 6, 356);
-  ctx.textAlign = 'left';
+  ctx.fillText('Arrows', W/2 + 28, 328);
+  ctx.fillText('Esc', W/2 + 28, 356);
   ctx.fillStyle = '#FFF5E4';
-  ctx.fillText('Shoot', rx, 328);
-  ctx.fillText('Close', rx, 356);
+  ctx.fillText('Shoot', W/2 + 118, 328);
+  ctx.fillText('Close', W/2 + 118, 356);
 
   ctx.textAlign = 'center';
 
