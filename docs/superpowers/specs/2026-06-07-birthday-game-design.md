@@ -115,15 +115,25 @@ Juice: tiny muzzle flash on fire, particle splash on impact, brief screen nudge 
 - **Animation:** hop cycle — squash on land, stretch mid-air (bob every 30 frames)
 - **Death:** green particle pop
 
-#### 🪰 Dive-Bomb Fly
+#### 🦇 Bat
 - **HP:** 1 · **Speed:** 2.5 orbit / 6 dash · **Behavior:** orbit at mid-range → telegraph → dash in straight line → reset
 - **Animation:** wing flutter (y-oscillate ±3px, 20-frame cycle)
-- **Death:** blue particle burst
+- **Death:** blue-purple particle burst
+- **Sprite:** `sprites/fly/DarkFantasyEnemies_FREE/Bat/Bat with VFX/`
+  - `Bat-IdleFly.png` (9 frames, 64×64px) — use for orbit phase
+  - `Bat-Run.png` (8 frames, 64×64px) — use for dash phase
+  - `Bat-Hurt.png` (5 frames) — use for hit flash
 
-#### 🐞 Tank Bug
+#### 🗿 Stone Golem
 - **HP:** 3 · **Speed:** 0.7 px/frame · **Behavior:** slow straight chase, ignores obstacles
 - **Animation:** shell pulse (scale ±2%, 60-frame breathe cycle) + HP pips on back (go dark when hit)
-- **Death:** large red explosion + 0.2s screen shake
+- **Death:** grey/brown explosion + 0.2s screen shake
+- **Sprite:** `sprites/mecha-stone-boss/Mecha-stone Golem 0.1/PNG sheet/Character_sheet.png`
+  - 1000×1000px combined sheet, all animations packed, frames ~100×100px
+  - Use row 0 (idle/moving, 4 frames) for normal movement
+
+#### 🐛 Grub (sprite needed)
+- **Note:** Grub sprite still needed — hopping ground creature (slime, caterpillar, worm, or small blob). Should be approximately 32–64px. The Grub is the third enemy type — a slow hopping creature that chases the player.
 
 ### Hit feedback (all enemies)
 - Red flash on hit (3 frames)
@@ -308,7 +318,7 @@ const CONFIG = {
 
 - **Palette:** Warm garden greens + earthy browns + gold accents. Dark room border/vignette.
 - **Player:** `img/character.png` with white fringe cleaned (alpha-keyed). Fallback: simple circle+face shape. Flips horizontally by facing direction.
-- **Enemies:** Canvas-drawn placeholder shapes. Isolated `drawGrub()`, `drawFly()`, `drawTank()` functions — swap in real sprites by replacing function body.
+- **Enemies:** Canvas-drawn placeholder shapes. Isolated `drawGrub()`, `drawFly()`, `drawTank()` functions — swap in real sprites by replacing function body. Display names: Grub, Bat (`e.type === 'fly'`), Stone Golem (`e.type === 'tank'`).
 - **Boss:** Canvas-drawn purple blob placeholder. Swap via `drawBloom()` when sprites land in `sprites/Bloom/`.
 - **Font:** Press Start 2P embedded as base64 `@font-face`. Used consistently for all UI text.
 - **Rooms:** Grass tile floor (2 variants, checkerboard), stone border walls, flower/pebble decorations, soft radial vignette overlay.

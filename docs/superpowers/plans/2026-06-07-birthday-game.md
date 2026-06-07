@@ -1404,7 +1404,9 @@ git commit -m "feat: room system, door transitions, minimap, skill pickup UI"
 
 ---
 
-## Task 5: Fly + Tank enemies, room configs, death juice
+## Task 5: Bat (Fly) + Stone Golem (Tank) enemies, room configs, death juice
+
+> **Display names:** The `e.type` values remain `'fly'` and `'tank'` in code (changing these would break room spawn configs in ROOM_GRAPH). Display/lore names are **Bat** (fly) and **Stone Golem** (tank).
 
 **Files:**
 - Modify: `index.html` (ENEMIES section)
@@ -1582,8 +1584,8 @@ Update all collision checks to use `enemyRadius(e)`.
 
 Navigate to Fight Room 1 (east door from start). Verify:
 - Grubs hop and chase
-- Navigate to Fight Room 2: flies orbit then dash with red telegraph glow
-- Fight Room 3: tank lumbers with HP pips on back, pips go dark on hit, big explosion on death
+- Navigate to Fight Room 2: Bats (fly type) orbit then dash with red telegraph glow
+- Fight Room 3: Stone Golem (tank type) lumbers with HP pips on back, pips go dark on hit, big explosion on death
 - Correct enemy counts in each room
 - No console errors
 
@@ -1591,7 +1593,7 @@ Navigate to Fight Room 1 (east door from start). Verify:
 
 ```bash
 git add index.html
-git commit -m "feat: fly and tank enemies, death juice, all 3 enemy types complete"
+git commit -m "feat: Bat (fly) and Stone Golem (tank) enemies, death juice, all 3 enemy types complete"
 ```
 
 ---
@@ -2106,6 +2108,17 @@ git commit -m "feat: Bloom boss (giant slime), 2 phases, HP bar, jump attack, bo
 ---
 
 ## Task 8: Art polish — garden rooms, vignette, player sprite, font, title
+
+> **Enemy display names and sprites:** `e.type === 'fly'` → display as **Bat**; `e.type === 'tank'` → display as **Stone Golem**. Type strings stay unchanged in code to avoid breaking room spawn configs.
+>
+> **Bat sprite files:** `sprites/fly/DarkFantasyEnemies_FREE/Bat/Bat with VFX/`
+> - `Bat-IdleFly.png` (9 frames, 64×64px) — orbit phase animation
+> - `Bat-Run.png` (8 frames, 64×64px) — dash phase animation
+> - `Bat-Hurt.png` (5 frames) — hit flash animation
+>
+> **Stone Golem sprite files:** `sprites/mecha-stone-boss/Mecha-stone Golem 0.1/PNG sheet/Character_sheet.png`
+> - 1000×1000px combined sheet, all animations packed, frames ~100×100px
+> - Use row 0 (idle/moving, 4 frames) for normal movement
 
 **Files:**
 - Modify: `index.html` (DRAWING, ASSETS sections)
