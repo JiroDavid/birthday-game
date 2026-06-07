@@ -106,6 +106,147 @@ const popupState = { type: null, index: 0 };
 const bossIntro = { timer: 0, duration: 120 };
 const confettiParticles = [];
 
+// ─── ROOMS ────────────────────────────────────────────────────────────────
+const ROOM_GRAPH = [
+  {
+    id: 0, name: 'Garden Path', type: 'start',
+    doors: { north: null, south: null, east: 1, west: null },
+    enemySpawns: [],
+    obstacles: [[3,2],[3,3],[11,5],[11,6],[7,1],[7,7]],
+    cleared: true, visited: true,
+  },
+  {
+    id: 1, name: 'The Thicket', type: 'fight',
+    doors: { north: null, south: null, east: 2, west: 0 },
+    enemySpawns: [
+      { type: 'grub', x: 200, y: 180 },
+      { type: 'grub', x: 650, y: 350 },
+      { type: 'grub', x: 420, y: 260 },
+      { type: 'fly',  x: 700, y: 200 },
+    ],
+    obstacles: [[2,2],[2,3],[12,5],[12,6],[5,4],[9,4]],
+    cleared: false, visited: false,
+  },
+  {
+    id: 2, name: 'Mossy Clearing', type: 'fight',
+    doors: { north: null, south: null, east: 3, west: 1 },
+    enemySpawns: [
+      { type: 'fly', x: 200, y: 200 },
+      { type: 'fly', x: 650, y: 200 },
+      { type: 'grub', x: 300, y: 380 },
+      { type: 'grub', x: 550, y: 380 },
+    ],
+    obstacles: [[3,1],[3,7],[11,1],[11,7],[7,3],[7,5]],
+    cleared: false, visited: false,
+  },
+  {
+    id: 3, name: 'Stone Garden', type: 'fight',
+    doors: { north: null, south: null, east: 4, west: 2 },
+    enemySpawns: [
+      { type: 'tank', x: 450, y: 280 },
+      { type: 'grub', x: 200, y: 200 },
+      { type: 'grub', x: 650, y: 380 },
+    ],
+    obstacles: [[2,2],[2,6],[12,2],[12,6],[4,4],[10,4]],
+    cleared: false, visited: false,
+  },
+  {
+    id: 4, name: 'Boss Chamber', type: 'boss',
+    doors: { north: null, south: null, east: 5, west: 3 },
+    enemySpawns: [],
+    obstacles: [[2,2],[12,2],[2,6],[12,6]],
+    cleared: false, visited: false,
+  },
+  {
+    id: 5, name: 'Secret Garden', type: 'garden',
+    doors: { north: null, south: null, east: null, west: 4 },
+    enemySpawns: [],
+    obstacles: [],
+    cleared: true, visited: false,
+    photoBoard:  { x: 200, y: 280 },
+    videoBoard:  { x: 450, y: 280 },
+    throne:      { x: 700, y: 280 },
+  },
+];
+
+function loadRoom(idx) {
+  const room = ROOM_GRAPH[idx];
+  currentRoom = room;
+  currentRoomIdx = idx;
+  room.visited = true;
+  enemies.length = 0;
+  tears.length = 0;
+  particles.length = 0;
+  boss = null;
+  room.enemySpawns.forEach(s => spawnEnemy(s.type, s.x, s.y));
+  if (room.type === 'boss') initBoss();
+}
+
+function isObstacle(tx, ty) {
+  if (!currentRoom) return false;
+  return currentRoom.obstacles.some(([ox, oy]) => ox === tx && oy === ty);
+}
+
+function circleCollidesRect(cx, cy, cr, rx, ry, rw, rh) {
+  const nearX = Math.max(rx, Math.min(cx, rx + rw));
+  const nearY = Math.max(ry, Math.min(cy, ry + rh));
+  return Math.hypot(cx - nearX, cy - nearY) < cr;
+}
+
+function resolveCircleVsObstacles(obj, radius) {
+  const tx = Math.floor(obj.x / TILE);
+  const ty = Math.floor((obj.y - PF_TOP) / TILE);
+  for (let dy = -1; dy <= 1; dy++) {
+    for (let dx = -1; dx <= 1; dx++) {
+      const ntx = tx + dx, nty = ty + dy;
+      if (ntx < 1 || ntx > COLS - 2 || nty < 1 || nty > ROWS - 2) continue;
+      if (!isObstacle(ntx, nty)) continue;
+      const rx = ntx * TILE, ry = PF_TOP + nty * TILE;
+      if (circleCollidesRect(obj.x, obj.y, radius, rx, ry, TILE, TILE)) {
+        const centerX = rx + TILE / 2, centerY = ry + TILE / 2;
+        const overlapX = (radius + TILE / 2) - Math.abs(obj.x - centerX);
+        const overlapY = (radius + TILE / 2) - Math.abs(obj.y - centerY);
+        if (overlapX < overlapY) {
+          obj.x += obj.x < centerX ? -overlapX : overlapX;
+        } else {
+          obj.y += obj.y < centerY ? -overlapY : overlapY;
+        }
+      }
+    }
+  }
+}
+
+function clampToRoom(obj, radius) {
+  obj.x = Math.max(TILE + radius, Math.min(W - TILE - radius, obj.x));
+  obj.y = Math.max(PF_TOP + TILE + radius, Math.min(H - TILE - radius, obj.y));
+}
+
+// ─── ENEMIES ──────────────────────────────────────────────────────────────
+function enemyRadius(e) {
+  return e.type === 'fly' ? 10 : e.type === 'tank' ? 22 : 14;
+}
+
+function spawnEnemy(type, x, y) {
+  const base = { type, x, y, hitFlash: 0, slowTimer: 0, knockVx: 0, knockVy: 0 };
+  if (type === 'grub') enemies.push({ ...base, hp: 2, hopTimer: 0 });
+  if (type === 'fly')  enemies.push({ ...base, hp: 1, phase: 'orbit', orbitAngle: Math.random() * Math.PI * 2, dashVx: 0, dashVy: 0, dashTimer: 0, telegraphTimer: 0, orbitRadius: 120 + Math.random() * 60, orbitFrames: null });
+  if (type === 'tank') enemies.push({ ...base, hp: 3, pulseTimer: 0, orbitalCooldown: 0 });
+}
+
+function updateGrub(e) {
+  const speed = 1.2 * (e.slowTimer > 0 ? 0.4 : 1);
+  const dx = player.x - e.x, dy = player.y - e.y;
+  const len = Math.hypot(dx, dy) || 1;
+  e.knockVx *= 0.85; e.knockVy *= 0.85;
+  e.x += (dx / len) * speed + e.knockVx;
+  e.y += (dy / len) * speed + e.knockVy;
+  resolveCircleVsObstacles(e, 14);
+  clampToRoom(e, 14);
+  e.hopTimer = (e.hopTimer + 1) % 30;
+  if (e.slowTimer > 0) e.slowTimer--;
+  if (e.hitFlash > 0) e.hitFlash--;
+}
+
 // ─── LOOP ─────────────────────────────────────────────────────────────────
 function update() {
   frameCount++;
@@ -114,8 +255,15 @@ function update() {
 
   if (gameState === 'PLAYING') {
     updatePlayer();
+    for (let i = enemies.length - 1; i >= 0; i--) {
+      const e = enemies[i];
+      if (e.type === 'grub') updateGrub(e);
+      // fly and tank added in Task 5
+    }
     updateTears();
     updateParticles();
+    checkTearEnemyCollisions();
+    checkPlayerEnemyCollisions();
   }
 }
 
@@ -149,6 +297,8 @@ function updatePlayer() {
     fireTear(sx, sy);
     player.fireTimer = CONFIG.player.fireRate;
   }
+  resolveCircleVsObstacles(player, 16);
+  clampToRoom(player, 16);
 }
 
 function fireTear(sx, sy) {
@@ -274,6 +424,7 @@ function render() {
   ctx.fillRect(0, PF_TOP, W, H - PF_TOP);
 
   drawTears();
+  enemies.forEach(drawEnemy);
   drawPlayer();
   drawParticles();
   drawHUD();
@@ -319,13 +470,101 @@ function initGame() {
   currentRoomIdx = 0;
   boss = null;
   gameState = 'PLAYING';
+  loadRoom(0);
 }
+
+function initBoss() { /* implemented in Task 7 */ }
 
 (function loop() {
   update();
   render();
   requestAnimationFrame(loop);
 })();
+
+// ─── COMBAT ───────────────────────────────────────────────────────────────
+function checkRoomClear() {
+  if (enemies.length > 0 || boss !== null) return;
+  if (currentRoom.cleared) return;
+  currentRoom.cleared = true;
+  // Skill pickup state and door unlock handled in Task 4.
+  // For now just mark cleared so doors open visually (Task 4 draws doors).
+}
+
+function damageEnemy(e, tearVx, tearVy, idx) {
+  e.hp--;
+  e.hitFlash = 6;
+  const len = Math.hypot(tearVx, tearVy) || 1;
+  e.knockVx = (tearVx / len) * 4;
+  e.knockVy = (tearVy / len) * 4;
+  if (player.skills.freeze) e.slowTimer = 120;
+  if (e.hp <= 0) killEnemy(e, idx);
+}
+
+function killEnemy(e, idx) {
+  const colors = { grub: '#4aaa2a', fly: '#6666ff', tank: '#cc2222' };
+  spawnParticles(e.x, e.y, colors[e.type] || '#fff',
+    e.type === 'tank' ? 20 : 10,
+    e.type === 'tank' ? 6  : 4,
+    e.type === 'tank' ? 40 : 20);
+  if (e.type === 'tank') startShake(8, 12);
+  enemies.splice(idx, 1);
+  checkRoomClear();
+}
+
+function checkTearEnemyCollisions() {
+  for (let ti = tears.length - 1; ti >= 0; ti--) {
+    const t = tears[ti];
+    let tearUsed = false;
+
+    for (let ei = enemies.length - 1; ei >= 0; ei--) {
+      const e = enemies[ei];
+      if (t.hitEnemies.has(ei)) continue;
+      if (Math.hypot(t.x - e.x, t.y - e.y) < t.radius + enemyRadius(e)) {
+        if (player.skills.explosive) {
+          [[1,0],[-1,0],[0,1],[0,-1]].forEach(([sx, sy]) => {
+            tears.push({
+              x: t.x, y: t.y,
+              vx: sx * CONFIG.player.tearSpeed * 0.7,
+              vy: sy * CONFIG.player.tearSpeed * 0.7,
+              life: 18, lifespan: 18, radius: t.radius,
+              hitEnemies: new Set([ei]), returning: false,
+            });
+          });
+        }
+        impactParticles(t.x, t.y, '#88aaff');
+        damageEnemy(e, t.vx, t.vy, ei);
+        if (!player.skills.piercing) {
+          tears.splice(ti, 1);
+          tearUsed = true;
+          break;
+        } else {
+          t.hitEnemies.add(ei);
+        }
+      }
+    }
+    if (tearUsed) continue;
+    // Boss tear collision handled in Task 7
+  }
+}
+
+function checkPlayerEnemyCollisions() {
+  if (player.iframes > 0) return;
+  for (let ei = enemies.length - 1; ei >= 0; ei--) {
+    const e = enemies[ei];
+    if (Math.hypot(player.x - e.x, player.y - e.y) < 16 + enemyRadius(e)) {
+      player.hp--;
+      player.iframes = CONFIG.player.iframeDuration;
+      // Knock player away from enemy
+      const dx = player.x - e.x, dy = player.y - e.y;
+      const len = Math.hypot(dx, dy) || 1;
+      player.vx = (dx / len) * 5;
+      player.vy = (dy / len) * 5;
+      startShake(4, 8);
+      if (player.hp <= 0) { gameState = 'TITLE'; }
+      break;
+    }
+  }
+}
 
 // ─── DRAWING ──────────────────────────────────────────────────────────────
 function px(size) { return `${size}px 'Press Start 2P', monospace`; }
@@ -360,6 +599,48 @@ function drawPlayer() {
     ctx.beginPath(); ctx.ellipse(7, -4, 2, 4, 0, 0, Math.PI * 2); ctx.fill();
   }
   ctx.restore();
+}
+
+function drawGrub(e) {
+  const bob = Math.sin(e.hopTimer / 30 * Math.PI * 2) * 4;
+  const squash = 1 + Math.abs(Math.sin(e.hopTimer / 30 * Math.PI * 2)) * 0.2;
+  ctx.save();
+  ctx.translate(e.x, e.y + bob);
+  ctx.scale(1 / squash, squash);
+  const bodyColor = e.hitFlash > 0 ? '#ffffff' : e.slowTimer > 0 ? '#88ccff' : '#4a8a2a';
+  const highColor  = e.hitFlash > 0 ? '#ffffff' : e.slowTimer > 0 ? '#aaddff' : '#5aaa3a';
+  ctx.fillStyle = bodyColor;
+  ctx.beginPath(); ctx.ellipse(0, 0, 18, 13, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = highColor;
+  ctx.beginPath(); ctx.ellipse(0, -2, 14, 10, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#fff';
+  ctx.beginPath(); ctx.arc(-7, -5, 4, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(7, -5, 4, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#222';
+  ctx.beginPath(); ctx.arc(-6, -5, 2.5, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(8, -5, 2.5, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+}
+
+// Fly and Tank draw functions come in Task 5. Stub them now:
+function drawFly(e) {
+  ctx.save(); ctx.translate(e.x, e.y);
+  ctx.fillStyle = e.hitFlash > 0 ? '#fff' : '#5a5a9a';
+  ctx.beginPath(); ctx.arc(0, 0, 10, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+}
+
+function drawTank(e) {
+  ctx.save(); ctx.translate(e.x, e.y);
+  ctx.fillStyle = e.hitFlash > 0 ? '#fff' : '#8a2a2a';
+  ctx.beginPath(); ctx.arc(0, 0, 22, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+}
+
+function drawEnemy(e) {
+  if (e.type === 'grub') drawGrub(e);
+  else if (e.type === 'fly')  drawFly(e);
+  else if (e.type === 'tank') drawTank(e);
 }
 
 function drawTears() {
