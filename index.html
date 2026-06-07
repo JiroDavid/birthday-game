@@ -1,4 +1,14 @@
 <!DOCTYPE html>
+<!--
+  Happy Birthday, NopeYep! 🎂
+  ─────────────────────────────────────────────────────────
+  HOW TO PLAY: Double-click index.html — no install needed.
+
+  To add your photos: drop board1.png … board6.png into img/
+  To add videos: drop video1.mp4 … video3.mp4 into vid/
+  To deliver: zip index.html + img/ + vid/ and send the zip.
+  ─────────────────────────────────────────────────────────
+-->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -122,6 +132,83 @@ const GRUB_DS = 48; // display size (smaller than Bloom)
 loadImage('sprites/Momo-Mama/Momo-Mama/variants/green/mm-crawl.png',
   img => { grubSprites.crawl = img; });
 const GRUB_FRAMES = 5;
+
+// ─── AUDIO ────────────────────────────────────────────────────────────────
+let audioCtx = null;
+function getAudio() {
+  if (!audioCtx) audioCtx = new (window.AudioContext||window.webkitAudioContext)();
+  return audioCtx;
+}
+
+function playTone(freq, type, gain, dur, startT, endFreq) {
+  try {
+    const ac = getAudio();
+    const t = startT ?? ac.currentTime;
+    const osc = ac.createOscillator();
+    const g = ac.createGain();
+    osc.connect(g); g.connect(ac.destination);
+    osc.type = type||'sine';
+    osc.frequency.setValueAtTime(freq, t);
+    if (endFreq !== undefined) osc.frequency.exponentialRampToValueAtTime(endFreq, t+dur);
+    g.gain.setValueAtTime(gain, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t+dur);
+    osc.start(t); osc.stop(t+dur);
+  } catch(e) { /* audio not ready yet */ }
+}
+
+function playShoot()       { playTone(880,'sine',0.15,0.07,null,660); }
+function playHit()         { playTone(220,'sawtooth',0.3,0.12,null,110); }
+function playPlayerHit() {
+  const t = audioCtx ? audioCtx.currentTime : null;
+  playTone(150,'sawtooth',0.4,0.08,t,80);
+  if (t) playTone(80,'sine',0.2,0.2,t+0.05,40);
+}
+function playEnemyDeath()  { playTone(440,'square',0.2,0.15,null,880); }
+function playTankDeath() {
+  const t = audioCtx ? audioCtx.currentTime : null;
+  playTone(80,'sawtooth',0.5,0.3,t,30);
+  if (t) playTone(40,'sine',0.3,0.5,t+0.1,20);
+}
+function playDoorUnlock() {
+  const ac = getAudio(), t = ac.currentTime;
+  [523,659,784].forEach((f,i) => playTone(f,'sine',0.2,0.15,t+i*0.1));
+}
+function playSkillPickup() {
+  const ac = getAudio(), t = ac.currentTime;
+  [523,659,784,1047].forEach((f,i) => playTone(f,'sine',0.15,0.12,t+i*0.08));
+}
+function playBossIntro() {
+  const ac = getAudio(), t = ac.currentTime;
+  playTone(80,'sawtooth',0.4,1.5,t,40);
+  playTone(120,'sine',0.2,0.3,t+1.2);
+}
+function playBossDeath() {
+  const ac = getAudio(), t = ac.currentTime;
+  [261,329,392,523,659,784].forEach((f,i) => playTone(f,'sine',0.25,0.3,t+i*0.1));
+}
+function playConfetti() {
+  const ac = getAudio(), t = ac.currentTime;
+  [523,659,784,1047,1318].forEach((f,i) => playTone(f,'sine',0.2,0.4,t+i*0.1));
+}
+
+// Photo board images
+const boardImages = CONFIG.photos.map(p => {
+  const img = new Image();
+  img.src = p.file;
+  return img;
+});
+
+// Video elements (overlaid on canvas using absolute positioning)
+const videoEls = CONFIG.videos.map(v => {
+  const el = document.createElement('video');
+  el.src = v.file;
+  el.preload = 'metadata';
+  el.controls = true;
+  el.style.cssText = 'position:fixed;display:none;width:480px;height:270px;z-index:10;border:2px solid #8b6914;border-radius:4px;';
+  document.body.appendChild(el);
+  return el;
+});
+let activeVideoEl = null;
 
 // ─── STATE ────────────────────────────────────────────────────────────────
 let gameState = 'TITLE'; // TITLE | PLAYING | TRANSITION | SKILL_PICKUP | BOSS_INTRO | POPUP | CELEBRATION
@@ -432,6 +519,82 @@ function updateTank(e) {
   e.pulseTimer = (e.pulseTimer + 1) % 60;
 }
 
+// ─── INTERACTION ──────────────────────────────────────────────────────────
+function tryInteract() {
+  if (!currentRoom) return;
+
+  // Pet befriend (also handled in update E-key block, but centralize here)
+  if (pet.active && !pet.befriended && Math.hypot(player.x-pet.x, player.y-pet.y) < 48) {
+    pet.befriended = true;
+    spawnParticles(pet.x, pet.y, '#cc66ff', 15, 4, 30);
+    return;
+  }
+
+  if (currentRoom.type !== 'garden') return;
+  const pb = currentRoom.photoBoard, vb = currentRoom.videoBoard, th = currentRoom.throne;
+
+  if (Math.hypot(player.x-pb.x, player.y-pb.y) < 50) {
+    openPopup('photos');
+  } else if (Math.hypot(player.x-vb.x, player.y-vb.y) < 50) {
+    openPopup('videos');
+  } else if (Math.hypot(player.x-th.x, player.y-th.y) < 50) {
+    startCelebration();
+  }
+}
+
+function openPopup(type) {
+  popupState.type = type;
+  popupState.index = 0;
+  gameState = 'POPUP';
+  if (type === 'videos') showVideo(0);
+}
+
+function closePopup() {
+  if (activeVideoEl) {
+    activeVideoEl.pause();
+    activeVideoEl.style.display = 'none';
+    activeVideoEl = null;
+  }
+  confettiParticles.length = 0;
+  gameState = 'PLAYING';
+}
+
+function navigatePopup(dir) {
+  const list = popupState.type === 'photos' ? CONFIG.photos : CONFIG.videos;
+  popupState.index = (popupState.index + dir + list.length) % list.length;
+  if (popupState.type === 'videos') {
+    if (activeVideoEl) { activeVideoEl.pause(); activeVideoEl.style.display = 'none'; }
+    showVideo(popupState.index);
+  }
+}
+
+function showVideo(idx) {
+  const rect = canvas.getBoundingClientRect();
+  activeVideoEl = videoEls[idx];
+  activeVideoEl.style.left = (rect.left + W/2 - 240) + 'px';
+  activeVideoEl.style.top  = (rect.top  + H/2 - 135) + 'px';
+  activeVideoEl.style.display = 'block';
+}
+
+function startCelebration() {
+  gameState = 'CELEBRATION';
+  const colors = ['#ff6b6b','#ffd93d','#6bcb77','#4d96ff','#ff922b','#cc5de8'];
+  for (let i = 0; i < 80; i++) {
+    confettiParticles.push({
+      x: Math.random() * W,
+      y: -10 - Math.random() * 60,
+      vx: (Math.random()-0.5) * 3,
+      vy: 2 + Math.random() * 3,
+      rot: Math.random() * Math.PI*2,
+      rotV: (Math.random()-0.5) * 0.15,
+      w: 8 + Math.random() * 8,
+      h: 5 + Math.random() * 5,
+      color: colors[Math.floor(Math.random()*colors.length)],
+    });
+  }
+  playConfetti();
+}
+
 // ─── LOOP ─────────────────────────────────────────────────────────────────
 function update() {
   frameCount++;
@@ -441,7 +604,16 @@ function update() {
   if (gameState === 'TRANSITION') { updateTransition(); return; }
   if (gameState === 'BOSS_INTRO') { updateBossIntro(); return; }
   if (gameState === 'SKILL_PICKUP') { updateSkillPickup(); return; }
-  if (gameState === 'POPUP' || gameState === 'CELEBRATION') return;
+  if (gameState === 'POPUP') return;
+  if (gameState === 'CELEBRATION') {
+    // Tick confetti physics
+    for (let i = confettiParticles.length-1; i >= 0; i--) {
+      const c = confettiParticles[i];
+      c.x += c.vx; c.y += c.vy; c.vy += 0.05; c.rot += c.rotV;
+      if (c.y > H+20) confettiParticles.splice(i,1);
+    }
+    return;
+  }
 
   if (gameState === 'PLAYING') {
     updatePlayer();
@@ -459,15 +631,7 @@ function update() {
     checkTearEnemyCollisions();
     checkPlayerEnemyCollisions();
     checkDoorTrigger();
-    // Pet befriend (E key)
-    if (keysJustPressed['e'] || keysJustPressed['E']) {
-      if (pet.active && !pet.befriended &&
-          Math.hypot(player.x - pet.x, player.y - pet.y) < 48) {
-        pet.befriended = true;
-        spawnParticles(pet.x, pet.y, '#cc66ff', 15, 4, 30);
-      }
-      // Note: board/throne interaction handled in Task 9 (tryInteract)
-    }
+    // E key interaction now handled in keydown via tryInteract()
   }
 }
 
@@ -533,6 +697,7 @@ function fireTear(sx, sy) {
   } else {
     tears.push({ ...baseTear });
   }
+  playShoot();
 }
 
 function updateTears() {
@@ -639,12 +804,41 @@ function render() {
   if (gameState==='SKILL_PICKUP') { drawSkillPickup(); ctx.restore(); return; }
   if (gameState==='BOSS_INTRO')   { drawBossIntro();   ctx.restore(); return; }
 
+  if (gameState === 'POPUP') {
+    if (currentRoom) drawRoom(currentRoom);
+    drawGardenProps(currentRoom);
+    drawPet();
+    drawPlayer();
+    drawHUD();
+    drawPopup();
+    ctx.restore(); return;
+  }
+
+  if (gameState === 'CELEBRATION') {
+    drawCelebration();
+    ctx.restore(); return;
+  }
+
   ctx.restore();
 }
 
 window.addEventListener('keydown', e => {
   if (!keys[e.key]) keysJustPressed[e.key] = true;
   keys[e.key] = true;
+
+  // Popup / celebration controls
+  if ((e.key==='e'||e.key==='E'||e.key==='Escape') &&
+      (gameState==='POPUP'||gameState==='CELEBRATION')) {
+    closePopup(); e.preventDefault(); return;
+  }
+  if (e.key==='ArrowLeft'  && gameState==='POPUP') { navigatePopup(-1); e.preventDefault(); return; }
+  if (e.key==='ArrowRight' && gameState==='POPUP') { navigatePopup(1);  e.preventDefault(); return; }
+
+  // E key in PLAYING — tryInteract
+  if ((e.key==='e'||e.key==='E') && gameState==='PLAYING') {
+    tryInteract();
+  }
+
   if (e.key === 'Enter' && gameState === 'TITLE') initGame();
   const gameKeys = ['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','w','a','s','d','W','A','S','D','e','E','Enter',' ','Escape'];
   if (gameKeys.includes(e.key)) e.preventDefault();
@@ -835,6 +1029,7 @@ function checkRoomClear() {
   if (enemies.length > 0 || boss !== null) return;
   if (currentRoom.cleared) return;
   currentRoom.cleared = true;
+  playDoorUnlock();
   if (skillPool.length >= 2 && currentRoom.type !== 'start' && currentRoom.type !== 'garden') {
     skillPickupState.choices = [skillPool.pop(), skillPool.pop()];
     skillPickupState.selected = 0;
@@ -843,6 +1038,7 @@ function checkRoomClear() {
 }
 
 function damageEnemy(e, tearVx, tearVy, idx) {
+  playHit();
   e.hp--;
   e.hitFlash = 6;
   const len = Math.hypot(tearVx, tearVy) || 1;
@@ -854,6 +1050,7 @@ function damageEnemy(e, tearVx, tearVy, idx) {
 
 function killBoss() {
   if (!boss) return;
+  playBossDeath();
   spawnParticles(boss.x, boss.y, '#aa44ee', 40, 8, 60);
   spawnParticles(boss.x, boss.y, '#44ee88', 20, 6, 50);
   spawnParticles(boss.x, boss.y, '#ffffff', 15, 5, 45);
@@ -866,6 +1063,7 @@ function killBoss() {
 }
 
 function killEnemy(e, idx) {
+  if (e.type === 'tank') playTankDeath(); else playEnemyDeath();
   const colors = { grub: '#4aaa2a', fly: '#6666ff', tank: '#cc2222' };
   spawnParticles(e.x, e.y, colors[e.type] || '#fff',
     e.type === 'tank' ? 20 : 10,
@@ -940,6 +1138,7 @@ function checkPlayerEnemyCollisions() {
   for (let ei = enemies.length - 1; ei >= 0; ei--) {
     const e = enemies[ei];
     if (Math.hypot(player.x - e.x, player.y - e.y) < 16 + enemyRadius(e)) {
+      playPlayerHit();
       player.hp--;
       player.iframes = CONFIG.player.iframeDuration;
       // Knock player away from enemy
@@ -1112,6 +1311,7 @@ function drawSkillPickup() {
 
 function updateBossIntro() {
   bossIntro.timer++;
+  if (bossIntro.timer === 1) playBossIntro();
   if (bossIntro.timer >= bossIntro.duration) gameState = 'PLAYING';
 }
 
@@ -1131,6 +1331,7 @@ function drawBossIntro() {
 
 // ─── SKILLS ───────────────────────────────────────────────────────────────
 function applySkill(skillId) {
+  playSkillPickup();
   player.skills[skillId] = true;
   spawnParticles(player.x, player.y, '#e8c547', 20, 5, 30);
 
@@ -1591,6 +1792,103 @@ function drawGardenProps(room) {
     ctx.fillText('[E]', tx, ty-62);
   }
   ctx.textAlign='left';
+  ctx.restore();
+}
+
+function drawPopup() {
+  ctx.save();
+  ctx.fillStyle = 'rgba(0,0,0,0.75)';
+  ctx.fillRect(0, 0, W, H);
+
+  const pw=600, ph=360, px2=W/2-300, py2=H/2-180;
+
+  // Frame
+  ctx.fillStyle = '#1a1209';
+  roundRect(ctx, px2, py2, pw, ph, 8); ctx.fill();
+  ctx.strokeStyle='#8b6914'; ctx.lineWidth=4; ctx.stroke();
+  ctx.strokeStyle='#5a4510'; ctx.lineWidth=2;
+  roundRect(ctx, px2+4, py2+4, pw-8, ph-8, 6); ctx.stroke();
+
+  ctx.textAlign = 'center';
+
+  if (popupState.type === 'photos') {
+    const cfg = CONFIG.photos[popupState.index];
+    const img = boardImages[popupState.index];
+
+    ctx.fillStyle='#e8c547'; ctx.font=px(6);
+    ctx.fillText('📸 PHOTOS FROM FRIENDS', W/2, py2+26);
+    ctx.fillStyle='#666'; ctx.font=px(5);
+    ctx.fillText(`${popupState.index+1} / ${CONFIG.photos.length}`, W/2, py2+42);
+
+    const ix=W/2-200, iy=py2+58, iw=400, ih=220;
+    if (img.naturalWidth > 0) {
+      ctx.drawImage(img, ix, iy, iw, ih);
+    } else {
+      ctx.fillStyle='#222'; ctx.fillRect(ix,iy,iw,ih);
+      ctx.fillStyle='#555'; ctx.font=px(5);
+      ctx.fillText('[ drop '+cfg.file+' here ]', W/2, iy+ih/2);
+    }
+
+    ctx.fillStyle='#c8a040'; ctx.font=px(5);
+    ctx.fillText(cfg.caption, W/2, iy+ih+20);
+
+    ctx.fillStyle='#e8c547'; ctx.font='28px sans-serif';
+    ctx.fillText('◄', px2+28, H/2+10);
+    ctx.fillText('►', px2+pw-28, H/2+10);
+  }
+
+  if (popupState.type === 'videos') {
+    ctx.fillStyle='#a0a0e0'; ctx.font=px(6);
+    ctx.fillText('🎥 VIDEO MESSAGES', W/2, py2+26);
+    ctx.fillStyle='#666'; ctx.font=px(5);
+    ctx.fillText(`${popupState.index+1} / ${CONFIG.videos.length}`, W/2, py2+42);
+    ctx.fillStyle='#444'; ctx.font=px(5);
+    ctx.fillText(CONFIG.videos[popupState.index].caption, W/2, py2+ph-30);
+    ctx.fillStyle='#e8c547'; ctx.font='28px sans-serif';
+    ctx.fillText('◄', px2+28, H/2+10);
+    ctx.fillText('►', px2+pw-28, H/2+10);
+  }
+
+  ctx.fillStyle='#555'; ctx.font=px(5);
+  ctx.fillText('[◄ ►] navigate   [E / Esc] close', W/2, py2+ph-12);
+  ctx.restore();
+}
+
+function drawCelebration() {
+  if (currentRoom) drawRoom(currentRoom);
+  drawGardenProps(currentRoom);
+  drawPet();
+  drawPlayer();
+  drawHUD();
+
+  // Confetti
+  confettiParticles.forEach(c => {
+    ctx.save();
+    ctx.translate(c.x, c.y); ctx.rotate(c.rot);
+    ctx.fillStyle = c.color;
+    ctx.fillRect(-c.w/2, -c.h/2, c.w, c.h);
+    ctx.restore();
+  });
+
+  // Banner
+  const bw=520, bh=140, bx=W/2-260, by=H/2-70;
+  ctx.save();
+  ctx.fillStyle='rgba(10,20,10,0.88)';
+  roundRect(ctx, bx, by, bw, bh, 12); ctx.fill();
+  ctx.strokeStyle='#e8c547'; ctx.lineWidth=3; ctx.stroke();
+  ctx.textAlign='center';
+  ctx.fillStyle='#e8c547'; ctx.font=px(10);
+  ctx.shadowColor='#e8c547'; ctx.shadowBlur=12;
+  ctx.fillText('🎉 HAPPY BIRTHDAY 🎉', W/2, by+46);
+  ctx.shadowBlur=0; ctx.shadowColor='transparent';
+  ctx.fillStyle='#ffffff'; ctx.font=px(18);
+  ctx.shadowColor='#fff'; ctx.shadowBlur=15;
+  ctx.fillText(CONFIG.friendName+'!', W/2, by+90);
+  ctx.shadowBlur=0; ctx.shadowColor='transparent';
+  ctx.fillStyle='#a0c87a'; ctx.font=px(6);
+  ctx.fillText(CONFIG.subtitle, W/2, by+114);
+  ctx.fillStyle='#555'; ctx.font=px(5);
+  ctx.fillText('[E / Esc] keep wandering', W/2, by+bh+16);
   ctx.restore();
 }
 
