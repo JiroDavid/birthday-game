@@ -135,7 +135,8 @@ window.addEventListener('keydown', e => {
   if (!keys[e.key]) keysJustPressed[e.key] = true;
   keys[e.key] = true;
   if (e.key === 'Enter' && gameState === 'TITLE') initGame();
-  e.preventDefault();
+  const gameKeys = ['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','w','a','s','d','W','A','S','D','e','E','Enter',' ','Escape'];
+  if (gameKeys.includes(e.key)) e.preventDefault();
 });
 window.addEventListener('keyup', e => { keys[e.key] = false; });
 
@@ -148,6 +149,9 @@ function startShake(intensity, duration) {
 function initGame() {
   player.hp = player.maxHP;
   player.iframes = 0;
+  player.fireTimer = 0;
+  player.vx = 0; player.vy = 0;
+  player.facing = 1;
   player.x = 450; player.y = 300;
   Object.keys(player.skills).forEach(k => player.skills[k] = false);
   player.orbitals = [];
@@ -224,6 +228,7 @@ function drawTitle() {
   ctx.shadowColor = '#e8c547'; ctx.shadowBlur = 15;
   ctx.fillText('NOPEYEP', W / 2, 170);
   ctx.shadowBlur = 0;
+  ctx.shadowColor = 'transparent';
   ctx.fillStyle = '#a0e060';
   ctx.font = px(10);
   ctx.fillText('BIRTHDAY QUEST', W / 2, 210);
@@ -238,8 +243,9 @@ function drawTitle() {
   if (Math.floor(frameCount / 30) % 2 === 0) {
     ctx.fillStyle = '#e8c547'; ctx.font = px(8);
     ctx.shadowColor = '#e8c547'; ctx.shadowBlur = 10;
-    ctx.fillText('PRESS ENTER', W / 2, 430);
+    ctx.fillText('PRESS ENTER TO START', W / 2, 430);
     ctx.shadowBlur = 0;
+    ctx.shadowColor = 'transparent';
   }
   ctx.textAlign = 'left';
 }
