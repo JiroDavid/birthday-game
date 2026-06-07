@@ -145,7 +145,7 @@ const enemies = [];    // see enemy types below
 const particles = [];  // { x, y, vx, vy, life, maxLife, r, color }
 
 let currentRoomIdx = 0;
-let boss = null;       // Cake Golem object when active
+let boss = null;       // Bloom object when active
 
 // Transition state
 const transition = { active: false, progress: 0, duration: 18, fromIdx: 0, toIdx: 0, dir: 1 };
@@ -162,6 +162,9 @@ const bossIntro = { timer: 0, duration: 120 }; // 2s
 
 // Celebration confetti
 const confettiParticles = [];
+
+// Pet companion (mini Bloom, befriended after boss death)
+let pet = { x: 0, y: 0, active: false, befriended: false, bounceTimer: 0 };
 ```
 
 - [ ] **Step 1.3 — Add the game loop skeleton and input handling**
@@ -1687,7 +1690,7 @@ git commit -m "feat: all 8 mechanical skills implemented and stackable"
 
 ---
 
-## Task 7: Momo-Mama boss (Giant Slime)
+## Task 7: Bloom boss (Giant Slime)
 
 **Files:**
 - Modify: `index.html` (BOSS section, LOOP)
@@ -1720,10 +1723,10 @@ function initBoss() {
 }
 ```
 
-- [ ] **Step 7.2 — Implement updateMomaMama()**
+- [ ] **Step 7.2 — Implement updateBloom()**
 
 ```js
-function updateMomaMama() {
+function updateBloom() {
   if (!boss) return;
   if (boss.hitFlash > 0) boss.hitFlash--;
   if (boss.slowTimer > 0) boss.slowTimer--;
@@ -1812,10 +1815,10 @@ function updateMomaMama() {
 }
 ```
 
-- [ ] **Step 7.3 — Implement drawMomaMama()**
+- [ ] **Step 7.3 — Implement drawBloom()**
 
 ```js
-function drawMomaMama() {
+function drawBloom() {
   if (!boss) return;
 
   // Shadow on ground during telegraph
@@ -1881,7 +1884,7 @@ function drawBossHPBar() {
   ctx.fillStyle = '#e8c547';
   ctx.font = px(5);
   ctx.textAlign = 'center';
-  ctx.fillText('MOMO-MAMA', W / 2, by - 6);
+  ctx.fillText('BLOOM', W / 2, by - 6);
   ctx.textAlign = 'left';
 }
 ```
@@ -1921,16 +1924,81 @@ In `checkTearEnemyCollisions()`, after the enemy loop, add:
   }
 ```
 
-Implement `killBoss()`:
+Implement `killBoss()` — after setting `boss = null`, activate mini Bloom:
 ```js
 function killBoss() {
   spawnParticles(boss.x, boss.y, '#aa44ee', 40, 8, 60);
   spawnParticles(boss.x, boss.y, '#44ee88', 20, 6, 50);
   spawnParticles(boss.x, boss.y, '#ffffff', 15, 5, 45);
   startShake(15, 30);
+  pet.x = boss.x; pet.y = boss.y;
+  pet.active = true; pet.befriended = false;
   boss = null;
   checkRoomClear();
 }
+```
+
+Add `updatePet()` function:
+```js
+function updatePet() {
+  if (!pet.active) return;
+  pet.bounceTimer++;
+  if (!pet.befriended) return; // stays at boss death position until befriended
+  // Follow player with lag
+  const dx = player.x - pet.x, dy = player.y - pet.y;
+  const dist = Math.hypot(dx, dy);
+  const targetDist = 60;
+  if (dist > targetDist + 5) {
+    const speed = Math.min((dist - targetDist) * 0.1, 4);
+    pet.x += (dx / dist) * speed;
+    pet.y += (dy / dist) * speed;
+  }
+}
+```
+
+Add `drawPet()` function:
+```js
+function drawPet() {
+  if (!pet.active) return;
+  const bounce = Math.sin(pet.bounceTimer * 0.08) * 3;
+  ctx.save();
+  ctx.translate(pet.x, pet.y + bounce);
+  ctx.fillStyle = '#cc66ff';
+  ctx.beginPath(); ctx.ellipse(0, 0, 16, 13, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,0.3)';
+  ctx.beginPath(); ctx.ellipse(-5, -5, 5, 3, -0.4, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#fff';
+  ctx.beginPath(); ctx.arc(-6, -2, 4, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(6, -2, 4, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#220033';
+  ctx.beginPath(); ctx.arc(-5, -2, 2.5, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(7, -2, 2.5, 0, Math.PI * 2); ctx.fill();
+  if (!pet.befriended) {
+    // Show [E] prompt when player nearby
+    if (Math.hypot(player.x - pet.x, player.y - pet.y) < 48) {
+      ctx.fillStyle = '#fff'; ctx.font = '9px "Press Start 2P", monospace';
+      ctx.textAlign = 'center'; ctx.fillText('[E] befriend', 0, -26);
+      ctx.textAlign = 'left';
+    }
+  }
+  ctx.restore();
+}
+```
+
+Add E-key befriend trigger in `tryInteract()` (Task 9):
+```js
+// In tryInteract(), add:
+if (pet.active && !pet.befriended && Math.hypot(player.x - pet.x, player.y - pet.y) < 48) {
+  pet.befriended = true;
+  spawnParticles(pet.x, pet.y, '#cc66ff', 15, 4, 30);
+}
+```
+
+Wire `updatePet()` into the PLAYING update block (after `updateOrbitals()`), and `drawPet()` into render (after `drawPlayer()`).
+
+Add `pet` reset in `initGame()`:
+```js
+pet.active = false; pet.befriended = false;
 ```
 
 - [ ] **Step 7.5 — BOSS_INTRO state**
@@ -1949,7 +2017,7 @@ function drawBossIntro() {
   ctx.fillStyle = '#cc3333';
   ctx.font = px(9);
   ctx.textAlign = 'center';
-  ctx.fillText('MOMO-MAMA', W / 2, H / 2 - 20);
+  ctx.fillText('BLOOM', W / 2, H / 2 - 20);
   ctx.fillStyle = '#888';
   ctx.font = px(6);
   ctx.fillText('She\'s here to protect her slimes...', W / 2, H / 2 + 20);
@@ -1970,20 +2038,20 @@ Wire into update() and render():
 Wire boss into PLAYING update and render:
 ```js
 // update() PLAYING block:
-    if (boss) updateMomaMama();
+    if (boss) updateBloom();
 
 // render() PLAYING block, after enemies:
-    if (boss) drawMomaMama();
+    if (boss) drawBloom();
     if (boss) drawBossHPBar();
 ```
 
 - [ ] **Step 7.6 — Verify in browser**
 
 Navigate through 3 fight rooms and into boss room. Verify:
-- Boss intro flash shows "MOMO-MAMA" then fades to gameplay
-- Momo-Mama crawls toward player with wobble animation
+- Boss intro flash shows "BLOOM" then fades to gameplay
+- Bloom crawls toward player with wobble animation
 - Jump telegraph shadow appears on player position, then boss leaps and lands with AoE splash
-- HP bar shows "MOMO-MAMA" across bottom
+- HP bar shows "BLOOM" across bottom
 - Phase 2 triggers at ≤12 HP: speed increases, 3 grub minions spawn, aimed blob added on jump landing
 - Killing boss spawns purple/green particles, triggers skill pickup
 - No console errors
@@ -1992,7 +2060,7 @@ Navigate through 3 fight rooms and into boss room. Verify:
 
 ```bash
 git add index.html
-git commit -m "feat: Momo-Mama boss (giant slime), 2 phases, HP bar, jump attack, boss death"
+git commit -m "feat: Bloom boss (giant slime), 2 phases, HP bar, jump attack, boss death"
 ```
 
 ---
@@ -2668,7 +2736,7 @@ To deliver to NopeYep:
 
 ## Self-Review Notes
 
-- All function names used across tasks are consistent: `drawGrub`, `drawFly`, `drawTank`, `drawMomaMama`, `updateGrub`, `updateFly`, `updateTank`, `updateMomaMama`, `killEnemy`, `killBoss`, `spawnEnemy`, `checkRoomClear`, `checkTearEnemyCollisions`, `resolveCircleVsObstacles`, `clampToRoom`, `enemyRadius`, `openPopup`, `closePopup`, `navigatePopup`, `tryInteract`, `startCelebration`, `roundRect`, `wrapText`, `px`, `startShake`, `spawnParticles`, `impactParticles`, `loadRoom`, `startTransition`, `checkDoorTrigger`, `fireTear`, `updateTears`, `updateParticles`, `updateOrbitals`, `applySkill`, `initBoss`
+- All function names used across tasks are consistent: `drawGrub`, `drawFly`, `drawTank`, `drawBloom`, `updateGrub`, `updateFly`, `updateTank`, `updateBloom`, `killEnemy`, `killBoss`, `spawnEnemy`, `checkRoomClear`, `checkTearEnemyCollisions`, `resolveCircleVsObstacles`, `clampToRoom`, `enemyRadius`, `openPopup`, `closePopup`, `navigatePopup`, `tryInteract`, `startCelebration`, `roundRect`, `wrapText`, `px`, `startShake`, `spawnParticles`, `impactParticles`, `loadRoom`, `startTransition`, `checkDoorTrigger`, `fireTear`, `updateTears`, `updateParticles`, `updateOrbitals`, `applySkill`, `initBoss`, `updatePet`, `drawPet`
 - `enemyRadius()` must be defined before `checkTearEnemyCollisions()` and `checkPlayerEnemyCollisions()`
 - `keysJustPressed` must be cleared at start of `update()` before any state reads it
 - `px()` and `px2()` are duplicates — consolidate to just `px()` throughout

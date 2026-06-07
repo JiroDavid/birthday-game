@@ -28,7 +28,7 @@ A single-file HTML5 canvas birthday gift game for **NopeYep**. Classic Binding o
 // ─── DRAWING ─────── drawPlayer, drawEnemy, drawRoom, drawHUD,
 //                    drawMinimap, drawPopup, drawConfetti, drawBossHPBar
 // ─── ENEMIES ─────── spawnEnemy, updateGrub, updateFly, updateTank
-// ─── BOSS ────────── updateMomaMama, drawMomaMama
+// ─── BOSS ────────── updateBloom, drawBloom
 // ─── SKILLS ─────────applySkill, updateOrbitals, updateTears (skill effects)
 // ─── ROOMS ──────────room graph data, loadRoom, checkDoors, transition
 // ─── LOOP ───────────update() + render() via requestAnimationFrame
@@ -61,7 +61,7 @@ TITLE → PLAYING → TRANSITION (room slide, 0.3s)
 | Fight 1 | 3 grubs + 1 fly | Skill pickup on clear |
 | Fight 2 | 2 flies + 2 grubs | Skill pickup on clear |
 | Fight 3 | 1 tank + 2 grubs | Skill pickup on clear |
-| Boss | Momo-Mama | Boss intro flash; skill pickup on death |
+| Boss | Bloom | Boss intro flash; skill pickup on death |
 | Garden | none | Photos board, Videos board, Throne |
 
 ### Room structure
@@ -162,12 +162,12 @@ Triggered after each room clear (3 combat rooms + boss = 4 pickups total).
 
 ---
 
-## 6. Boss — Momo-Mama (Giant Slime)
+## 6. Boss — Bloom (Giant Slime)
 
 **Room:** dedicated boss room between Fight 3 and Garden.  
-**Intro:** 2s flash screen "MOMO-MAMA" in large retro font + ominous audio sting.  
-**Art:** Sprite sheets in `sprites/Momo-Mama/` (64×64 per frame, horizontal sprite sheets). Falls back to canvas-drawn blob placeholder if folder missing.  
-**Lore:** Momo-Mama is a giant slime who protects the smaller Momo slimes. Cute but aggressive when threatened.
+**Intro:** 2s flash screen "BLOOM" in large retro font + ominous audio sting.  
+**Art:** Sprite sheets in `sprites/Bloom/` (64×64 per frame, horizontal sprite sheets). Falls back to canvas-drawn blob placeholder if folder missing.  
+**Lore:** Bloom is a giant slime who protects the smaller Momo slimes. Cute but aggressive when threatened.
 
 ### Stats
 
@@ -180,7 +180,7 @@ Triggered after each room clear (3 combat rooms + boss = 4 pickups total).
 
 ### Phase 1 (24–13 HP)
 - Slowly **crawls** toward player (crawl/idle animation).
-- Every 3s: **telegraphs a jump attack** — shadow appears on player position for 1s, then Momo-Mama leaps and **lands on the shadow** with AoE splash (impactParticles in purple/green, screen shake). Safe to dodge by moving off the shadow.
+- Every 3s: **telegraphs a jump attack** — shadow appears on player position for 1s, then Bloom leaps and **lands on the shadow** with AoE splash (impactParticles in purple/green, screen shake). Safe to dodge by moving off the shadow.
 - Jump is telegraphed 1s in advance with a darkening ground circle at the target.
 
 ### Phase 2 (≤12 HP)
@@ -196,11 +196,20 @@ Triggered after each room clear (3 combat rooms + boss = 4 pickups total).
 - Skill pedestal drops in center of room.
 - Doors to Garden unlock after pedestal is collected.
 
+### Befriend Mechanic
+After death, mini Bloom appears at the boss room center. Press E within 48px to befriend her.
+Once befriended, she becomes a **pet companion** that follows the player through all subsequent rooms:
+- Displayed as a tiny purple blob (40% of boss size, ~16px radius) with cute eyes
+- Floats ~60px behind the player with a slight lag/bounce
+- Persists through all room transitions
+- Appears in the Garden room alongside the player
+- Add `pet` object to STATE: `{ x, y, active: false, befriended: false, bounceTimer: 0 }`
+
 ### Boss HUD
 - HP bar across bottom of screen (Isaac-style).
-- Bar label: "MOMO-MAMA".
+- Bar label: "BLOOM".
 
-### Sprite files (when available in sprites/Momo-Mama/)
+### Sprite files (when available in sprites/Bloom/)
 - Crawl/Idle animation for Phase 1 movement
 - Angry animation for Phase 2
 - Jump/jump attack animation for the leap
@@ -292,7 +301,7 @@ const CONFIG = {
 - **Palette:** Warm garden greens + earthy browns + gold accents. Dark room border/vignette.
 - **Player:** `img/character.png` with white fringe cleaned (alpha-keyed). Fallback: simple circle+face shape. Flips horizontally by facing direction.
 - **Enemies:** Canvas-drawn placeholder shapes. Isolated `drawGrub()`, `drawFly()`, `drawTank()` functions — swap in real sprites by replacing function body.
-- **Boss:** Canvas-drawn purple blob placeholder. Swap via `drawMomaMama()` when sprites land in `sprites/Momo-Mama/`.
+- **Boss:** Canvas-drawn purple blob placeholder. Swap via `drawBloom()` when sprites land in `sprites/Bloom/`.
 - **Font:** Press Start 2P embedded as base64 `@font-face`. Used consistently for all UI text.
 - **Rooms:** Grass tile floor (2 variants, checkerboard), stone border walls, flower/pebble decorations, soft radial vignette overlay.
 - **Title screen:** Game title, "Happy Birthday, NopeYep!", controls list, Press E/Enter to start.
@@ -307,7 +316,7 @@ const CONFIG = {
 - [ ] 6-room progression with locked/unlocked doors
 - [ ] Skill pickup overlay after each room clear and boss kill
 - [ ] All 8 mechanical skills implemented and stackable
-- [ ] Momo-Mama boss: 2 phases, jump attack, HP bar, intro flash, death splat
+- [ ] Bloom boss: 2 phases, jump attack, HP bar, intro flash, death splat
 - [ ] Photos + Videos boards open, navigate, handle missing files gracefully
 - [ ] Throne → confetti + birthday banner; can dismiss and roam
 - [ ] Isaac-style minimap updates correctly
@@ -324,7 +333,7 @@ const CONFIG = {
 2. **Room system** — 6-room graph, doors lock/unlock, slide transitions, minimap
 3. **Enemies** — all 3 types + death juice + room enemy configs
 4. **Skill system** — pickup overlay UI + all 6 skills + stacking logic
-5. **Boss** — Momo-Mama, 2 phases, jump attack, HP bar, boss intro, death splat
+5. **Boss** — Bloom, 2 phases, jump attack, HP bar, boss intro, death splat
 6. **Art polish** — garden rooms, vignette, player sprite cleanup, font pass, title screen
 7. **Birthday content** — photo board, video board, throne + confetti + banner
 8. **Audio** — all Web Audio sfx
