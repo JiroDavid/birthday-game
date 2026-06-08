@@ -3090,31 +3090,6 @@ function drawTank(e) {
 const CYCLOPS_EYE_OFFSET = 20; // px above sprite center where the eye sits
 
 function drawCyclops(e) {
-  // Draw laser beam BEFORE translating (world coords)
-  if (e.phase === 'laser_fire') {
-    ctx.save();
-    const beamLen = 680;
-    const ox = e.x, oy = e.y - CYCLOPS_EYE_OFFSET;
-    const ex = ox + Math.cos(e.laserAngle) * beamLen;
-    const ey = oy + Math.sin(e.laserAngle) * beamLen;
-    const progress = Math.min(1, e.laserFireTimer / 30); // fade out last 0.5s
-    // Outer glow
-    ctx.globalAlpha = 0.35 * progress;
-    ctx.strokeStyle = '#ff8800'; ctx.lineWidth = 26;
-    ctx.shadowColor = '#ff4400'; ctx.shadowBlur = 24;
-    ctx.lineCap = 'round';
-    ctx.beginPath(); ctx.moveTo(ox, oy); ctx.lineTo(ex, ey); ctx.stroke();
-    // Core beam
-    ctx.globalAlpha = 0.9 * progress;
-    ctx.strokeStyle = '#ffeecc'; ctx.lineWidth = 6; ctx.shadowBlur = 10;
-    ctx.beginPath(); ctx.moveTo(ox, oy); ctx.lineTo(ex, ey); ctx.stroke();
-    // Inner white core
-    ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2; ctx.shadowBlur = 0;
-    ctx.beginPath(); ctx.moveTo(ox, oy); ctx.lineTo(ex, ey); ctx.stroke();
-    ctx.globalAlpha = 1; ctx.shadowBlur = 0;
-    ctx.restore();
-  }
-
   ctx.save();
   ctx.translate(e.x, e.y);
   const facing = player.x > e.x ? 1 : -1;
@@ -3147,6 +3122,31 @@ function drawCyclops(e) {
     ctx.beginPath(); ctx.arc(6, -4, 3, 0, Math.PI*2); ctx.fill();
   }
   ctx.restore();
+
+  // Draw laser beam AFTER sprite so it renders on top
+  if (e.phase === 'laser_fire') {
+    ctx.save();
+    const beamLen = 680;
+    const ox = e.x, oy = e.y - CYCLOPS_EYE_OFFSET;
+    const ex = ox + Math.cos(e.laserAngle) * beamLen;
+    const ey = oy + Math.sin(e.laserAngle) * beamLen;
+    const progress = Math.min(1, e.laserFireTimer / 30);
+    // Outer glow
+    ctx.globalAlpha = 0.35 * progress;
+    ctx.strokeStyle = '#ff8800'; ctx.lineWidth = 26;
+    ctx.shadowColor = '#ff4400'; ctx.shadowBlur = 24;
+    ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(ox, oy); ctx.lineTo(ex, ey); ctx.stroke();
+    // Core beam
+    ctx.globalAlpha = 0.9 * progress;
+    ctx.strokeStyle = '#ffeecc'; ctx.lineWidth = 6; ctx.shadowBlur = 10;
+    ctx.beginPath(); ctx.moveTo(ox, oy); ctx.lineTo(ex, ey); ctx.stroke();
+    // Inner white core
+    ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2; ctx.shadowBlur = 0;
+    ctx.beginPath(); ctx.moveTo(ox, oy); ctx.lineTo(ex, ey); ctx.stroke();
+    ctx.globalAlpha = 1; ctx.shadowBlur = 0;
+    ctx.restore();
+  }
 }
 
 function drawBrute(e) {
