@@ -1,4 +1,18 @@
-# Birthday Game
+<div align="center">
+  <img src="assets/logo.svg" width="160" height="160" alt="Birthday Game"/>
+
+  <h1>Birthday Game</h1>
+
+  <p>A browser-based dungeon crawler built as a birthday gift</p>
+
+  [![HTML5](https://img.shields.io/badge/HTML5-E34F26?style=for-the-badge&logo=html5&logoColor=white)](#)
+  [![JavaScript](https://img.shields.io/badge/JavaScript-F7DF1E?style=for-the-badge&logo=javascript&logoColor=black)](#)
+  [![Browser](https://img.shields.io/badge/Browser-4285F4?style=for-the-badge&logo=googlechrome&logoColor=white)](#)
+  [![No Install](https://img.shields.io/badge/No%20Install-22C55E?style=for-the-badge)](#)
+
+</div>
+
+---
 
 A birthday present for NopeYep. A browser-based dungeon crawler you open by double-clicking `index.html` -- no install, no build step, nothing to configure.
 
