@@ -5,10 +5,10 @@
 
   <p>A browser-based dungeon crawler built as a birthday gift</p>
 
-  [![HTML5](https://img.shields.io/badge/HTML5-E34F26?style=for-the-badge&logo=html5&logoColor=white)](#)
-  [![JavaScript](https://img.shields.io/badge/JavaScript-F7DF1E?style=for-the-badge&logo=javascript&logoColor=black)](#)
-  [![Browser](https://img.shields.io/badge/Browser-4285F4?style=for-the-badge&logo=googlechrome&logoColor=white)](#)
-  [![No Install](https://img.shields.io/badge/No%20Install-22C55E?style=for-the-badge)](#)
+  [![HTML5](https://img.shields.io/badge/HTML5-E34F26?style=for-the-badge&logo=html5&logoColor=white)](https://developer.mozilla.org/en-US/docs/Web/HTML)
+  [![JavaScript](https://img.shields.io/badge/JavaScript-F7DF1E?style=for-the-badge&logo=javascript&logoColor=black)](https://developer.mozilla.org/en-US/docs/Web/JavaScript)
+  [![Browser](https://img.shields.io/badge/Browser-4285F4?style=for-the-badge&logo=googlechrome&logoColor=white)](#running-it)
+  [![No Install](https://img.shields.io/badge/No%20Install-22C55E?style=for-the-badge)](#running-it)
 
 </div>
 
